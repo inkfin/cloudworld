@@ -1,0 +1,24 @@
+{
+  "name": "cloudworld-island",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build:wasm && vite --host 0.0.0.0",
+    "build:wasm": "asc assembly/world.ts --outFile public/world.wasm --optimize --runtime stub",
+    "build": "npm run build:wasm && tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "npm run build:wasm && node --test tests/*.test.mjs",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.180.0",
+    "assemblyscript": "^0.28.8",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5",
+    "@playwright/test": "^1.55.0"
+  }
+}
