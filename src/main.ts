@@ -1,3 +1,5 @@
+import { locationAt } from './world/trails';
+import { sunsetStrength } from './world/materials';
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import './style.css';
@@ -47,7 +49,7 @@ async function start(){
   const mobile=()=>innerWidth<760;
   camera.position.set(26,29,36);
   const controls=new OrbitControls(camera,renderer.domElement);
-  controls.enableDamping=true;controls.dampingFactor=.07;controls.enablePan=false;controls.minPolarAngle=.35;controls.maxPolarAngle=1.13;controls.minZoom=.65;controls.maxZoom=3;controls.target.set(0,0,0);
+  controls.enableDamping=true;controls.dampingFactor=.07;controls.enablePan=false;controls.minPolarAngle=.35;controls.maxPolarAngle=1.13;controls.minZoom=.3;controls.maxZoom=3;controls.target.set(0,0,0);
   const world=buildIsland(scene,sim),player=child();scene.add(player.group);
   const environment=new Environment(scene,camera),animals=new CreatureSystem(world.creatures,world.obstacles,sim);
   const visibility=new VisibilitySystem(camera,world.canopies,world.caveRoof);
@@ -91,12 +93,12 @@ async function start(){
     b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(touchMap[b.dataset.move!]);};
     const release=()=>keys.delete(touchMap[b.dataset.move!]);b.onpointerup=release;b.onpointercancel=release;b.onlostpointercapture=release;
   });
-  enter.onclick=()=>{exploring=true;overview=false;document.body.classList.add('exploring');$('walking-hint').hidden=false;$('journal').hidden=false;$('touch-controls').hidden=false;toast('沿着小径去散步。石洞前的木平台，会响起不一样的脚步声。');};
+  enter.onclick=()=>{exploring=true;overview=false;document.body.classList.add('exploring');$('walking-hint').hidden=false;$('journal').hidden=false;$('touch-controls').hidden=false;toast('帐篷就在身后。沿木牌去花原、望海坡和岩洞，环路会带你回到营地。');};
   let userZoom=false;
   $('view-button').onclick=()=>{if(!exploring){controls.reset();layout();return;}overview=!overview;userZoom=false;$('view-button').setAttribute('aria-label',overview?'跟随角色':'切换远景');};
   function layout(){
     const a=innerWidth/innerHeight,half=mobile()?23:18;camera.left=-half*a;camera.right=half*a;camera.top=half;camera.bottom=-half;
-    if(!exploring){controls.target.set(mobile()?0:-8,mobile()?7:0,mobile()?0:3);camera.position.copy(controls.target).add(new THREE.Vector3(26,29,36));camera.zoom=mobile()?.75:1;}
+    if(!exploring){controls.target.set(mobile()?0:-15,mobile()?5:0,mobile()?0:3);camera.position.copy(controls.target).add(new THREE.Vector3(26,29,36));camera.zoom=mobile()?.37:.53;}
     camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);
   }
   window.addEventListener('resize',layout);layout();controls.update();controls.saveState();
@@ -119,7 +121,11 @@ async function start(){
     camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.crossVectors(forward,up).normalize();
     sim.step(right.x*ix+forward.x*iz,right.z*ix+forward.z*iz,dt,Number(running));
     const position={x:sim.x(),z:sim.z()};
-    for(let i=0;i<3;i++)for(const obstacle of world.obstacles)pushOutside(position,.25,obstacle);
+    for(let i=0;i<3;i++){
+      for(const obstacle of world.obstacles)pushOutside(position,.25,obstacle);
+      // A resting animal blocks the child; the animal moves through its reaction, not a player shove.
+      if(exploring)for(const c of world.creatures){if(c.group.position.y-floorHeight(position.x,position.z,sim)<1.3)pushOutside(position,.25,{x:c.group.position.x,z:c.group.position.z,radius:c.radius});}
+    }
     sim.resolve(position.x,position.z);
     const px=sim.x(),pz=sim.z(),py=floorHeight(px,pz,sim),distance=Math.hypot(px-oldX,pz-oldZ),speed=distance/dt;
     player.group.position.set(px,py,pz);playerShadow.position.set(px,py,pz);
@@ -130,7 +136,7 @@ async function start(){
     if(exploring){
       const target=overview?new THREE.Vector3(0,0,0):new THREE.Vector3(px,py,pz),delta=target.sub(controls.target).multiplyScalar(1-Math.exp(-dt*2));
       controls.target.add(delta);camera.position.add(delta);
-      const zoomTarget=overview?(mobile()?.72:1.05):(mobile()?1.75:1.65);
+      const zoomTarget=overview?(mobile()?.37:.55):(mobile()?1.75:1.65);
       if(!userZoom){camera.zoom+=(zoomTarget-camera.zoom)*(1-Math.exp(-dt*2));camera.updateProjectionMatrix();}
     }
     controls.update();scene.updateMatrixWorld(true);camera.updateMatrixWorld();
@@ -138,20 +144,23 @@ async function start(){
     const subjects=world.creatures.filter(c=>!exploring||c.group.position.distanceTo(player.group.position)<11).map(c=>c.group.position.clone().add(new THREE.Vector3(0,.35,0)));
     if(exploring)subjects.push(player.group.position.clone().add(new THREE.Vector3(0,.9,0)));
     visibility.update(dt,subjects,exploring&&cave>.15);
-    world.skyBirds.forEach((bird,i)=>{const t=elapsed*.075+i*1.3;bird.position.set(Math.sin(t)*15,8+i*.55,Math.cos(t)*11-3);bird.rotation.y=t+Math.PI/2;bird.rotation.z=Math.sin(t)*.1;});
+    world.skyBirds.forEach((bird,i)=>{const t=elapsed*.075+i*1.3;bird.position.set(Math.sin(t)*32,9+i*.55,Math.cos(t)*25-3);bird.rotation.y=t+Math.PI/2;bird.rotation.z=Math.sin(t)*.1;});
+    world.flames.forEach((flame,i)=>{flame.scale.set(1+Math.sin(elapsed*7+i)*.12,1+Math.sin(elapsed*9+i*2)*.2,1);});
+    (world.fireGlow.material as THREE.MeshBasicMaterial).opacity=(environment.period==='night'?.24:.08)*(1+Math.sin(elapsed*5)*.08);
+    world.longShadows.forEach(({mesh})=>{(mesh.material as THREE.MeshBasicMaterial).opacity=sunsetStrength.value*.19;});
     if(!reduceMotion)world.treeTops.forEach((tree,i)=>tree.rotation.z=Math.sin(elapsed*.6+i)*.012*environment.wind);
     if(exploring){
       nearest=undefined;let best=2.2;
       for(const c of world.creatures){const d=Math.hypot(c.group.position.x-px,c.group.position.z-pz);if(d<best&&Math.abs(c.group.position.y-py)<2.3){best=d;nearest=c;}}
       $('interaction').hidden=!nearest||dialog.open||mixDialog.open;
       if(nearest)$('interact-button').querySelector('span')!.textContent=nearest.state==='sleep'?'轻轻看看睡着的狐狸':`和${speciesNames[nearest.kind]}打个招呼`;
-      const surface=surfaceAt(px,pz,sim),location=cave>.15?'回声岩洞':surface==='wood'?'听风木台':surface==='sand'?'听潮海滩':'青苔森林';
+      const surface=surfaceAt(px,pz,sim),sign=world.signs.find(s=>Math.hypot(px-s.x,pz-s.z)<2.5),location=sign?sign.label:cave>.15?'回声岩洞':surface==='wood'?'听风木台':locationAt(px,pz);
       $('location').innerHTML=`<span>⌁</span> ${location}`;$('cave-actions').hidden=cave<.08||dialog.open||mixDialog.open;
     }
     sound.update(dt,{period:environment.period,cave:exploring?cave:0,wind:environment.wind,distance:exploring&&!dialog.open&&!mixDialog.open?distance:0,surface:surfaceAt(px,pz,sim),running,paused:document.hidden});
     renderer.render(scene,camera);
     frames++;statusTime+=dt;if(statusTime>1){fps=Math.round(frames/statusTime);frames=0;statusTime=0;}
-    (window as any).__island={ready:true,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state})),drawCalls:renderer.info.render.calls};
+    (window as any).__island={ready:true,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state,reactions:c.reactions})),trees:world.treeTops.length,drawCalls:renderer.info.render.drawCalls};
   });
 }
 start().catch(error=>{console.error(error);$('enter-label').textContent='小岛暂未抵达';$('load-status').textContent=error instanceof Error?error.message:String(error);$('load-status').style.maxWidth='310px';$('load-status').style.lineHeight='1.8';$('engine-status').textContent='WEBGPU UNAVAILABLE';});

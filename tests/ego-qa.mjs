@@ -34,7 +34,7 @@ await page.evaluate(()=>{const input=document.querySelector('#volume-wind');inpu
 await page.click('loc=css:#close-mix');
 await page.click('loc=css:#enter-button');await page.click('loc=css:#sound-button');
 await page.waitForFunction(()=>window.__island.audio.enabled);
-for(const [surface,x,z,key] of [['sand',0,8,'a'],['grass',2,3,'d'],['wood',6,.75,'w'],['stone',6,-2,'w']]){
+for(const [surface,x,z,key] of [['sand',0,18,'a'],['grass',2,7,'d'],['wood',13.2,.75,'w'],['stone',13.2,-5,'w']]){
  await page.evaluate(({x,z})=>window.__islandTest.warp(x,z),{x,z});
  await page.keyboard.down(key);
  try{await page.waitForFunction(s=>window.__island.audio.events.steps[s]>0,surface,{timeout:5000});}finally{await page.keyboard.up(key);}
@@ -48,6 +48,15 @@ await page.waitForFunction(()=>window.__island.audio.period==='sunset');
 console.log({audio:await page.evaluate(()=>window.__island.audio)});
 await page.click('loc=css:#sound-button');
 await page.waitForFunction(()=>!window.__island.audio.enabled);
+// Approach actual roaming animals; do not reposition the animals or inject their state.
+for(const [kind,state] of [['rabbit','flee'],['bird','takeoff'],['fox','startled']]){
+ await page.evaluate(()=>window.__islandTest.time(1));
+ if(kind==='bird')await page.waitForFunction(()=>window.__island.creatures.find(c=>c.kind==='bird').state==='roam',undefined,{timeout:20000});
+ const count=await page.evaluate(kind=>{const c=window.__island.creatures.find(c=>c.kind===kind);window.__islandTest.warp(c.x+.96,c.z);return c.reactions;},kind);
+ await page.waitForFunction(({kind,state,count})=>{const c=window.__island.creatures.find(c=>c.kind===kind);return c.state===state&&c.reactions>count;},{kind,state,count},{timeout:5000});
+ if(kind==='bird')await page.waitForFunction(()=>{const c=window.__island.creatures.find(c=>c.kind==='bird');return c.y>window.__island.position.y+1.8;});
+ console.log({reaction:kind,state:await page.evaluate(kind=>window.__island.creatures.find(c=>c.kind===kind),kind)});
+}
 await page.click('loc=css:#help-button');
 assert(await page.evaluate(()=>document.querySelector('#info-dialog').open),'help opens');await page.keyboard.press('Escape');
 assert(await page.evaluate(()=>!document.querySelector('#info-dialog').open),'help closes');
@@ -61,10 +70,11 @@ const button=await page.evaluate(()=>{const r=document.querySelector('[data-move
 const before=await page.evaluate(()=>window.__island.position);
 await page.cdp('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[button]});
 try{await page.waitForFunction(p=>Math.hypot(window.__island.position.x-p.x,window.__island.position.z-p.z)>.6,before,{timeout:4000});}finally{await page.cdp('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
-await page.evaluate(()=>window.__islandTest.warp(6,-2));
+await page.evaluate(()=>window.__islandTest.warp(13.2,-5));
 await page.waitForFunction(()=>window.__island.cave>.8);
+const settle=await page.evaluate(()=>window.__island.elapsed);await page.waitForFunction(t=>window.__island.elapsed>t+4,settle);
 await page.screenshot({path:`${root}/.playwright/mobile-cave-v2.png`});
 assert(await page.evaluate(()=>document.documentElement.scrollWidth===390),'no mobile overflow');
 assert((await page.evaluate(()=>window.__qaErrors)).length===0,'mobile runtime errors');
-console.log('PASS: WebGPU, time controls, four surfaces, cave echo, audio changes, mute, help, touch movement, mobile layout.');
+console.log('PASS: WebGPU, time controls, four surfaces, cave echo, animal contact reactions, audio changes, mute, help, touch movement, mobile layout.');
 if(!keep)await task.finish({keep:[]});

@@ -19,6 +19,7 @@ test('WebGPU scene, walking, animal greeting, audio and dialogs', async ({ page 
   await page.waitForTimeout(800);
   const after = (await state()).position;
   expect(Math.hypot(after.x - before.x, after.z - before.z)).toBeGreaterThan(.6);
+  await page.evaluate(() => {const c=(window as any).__island.creatures.find((c:any)=>c.kind==='rabbit');(window as any).__islandTest.warp(c.x+1.8,c.z);});
   await expect(page.locator('#interact-button')).toBeVisible();
   await page.keyboard.press('KeyE');
   await expect(page.locator('#journal-count')).toHaveText('1 / 7');

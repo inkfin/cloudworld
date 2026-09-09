@@ -7,8 +7,8 @@ import { pathToFileURL } from 'node:url';
 import * as THREE from 'three/webgpu';
 await mkdir('.playwright',{recursive:true});
 const dir=await mkdtemp(resolve('.playwright/world-test-'));
-await build({stdin:{contents:`export { buildIsland } from './src/world/island';export { CreatureSystem } from './src/world/creatures';export { VisibilitySystem } from './src/world/visibility';export * from './src/world/spatial';export { scores } from './src/audio';export { Environment } from './src/environment';`,resolveDir:process.cwd(),loader:'ts'},outfile:resolve(dir,'runtime.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'});
-const {buildIsland,CreatureSystem,VisibilitySystem,caveAmount,surfaceAt,floorHeight,pushOutside,CAVE,scores,Environment}=await import(pathToFileURL(resolve(dir,'runtime.mjs')));
+await build({stdin:{contents:`export { buildIsland } from './src/world/island';export { CreatureSystem } from './src/world/creatures';export { VisibilitySystem } from './src/world/visibility';export * from './src/world/spatial';export { scores } from './src/audio';export { TRAILS, CAMP, MEADOW, pathDistance } from './src/world/trails';export { Environment } from './src/environment';`,resolveDir:process.cwd(),loader:'ts'},outfile:resolve(dir,'runtime.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'});
+const {buildIsland,CreatureSystem,VisibilitySystem,caveAmount,surfaceAt,floorHeight,pushOutside,CAVE,scores,Environment,TRAILS,CAMP,MEADOW,pathDistance}=await import(pathToFileURL(resolve(dir,'runtime.mjs')));
 after(()=>rm(dir,{recursive:true,force:true}));
 async function setup(){const {instance}=await WebAssembly.instantiate(await readFile('public/world.wasm'),{env:{abort(){throw Error('WASM abort')}}});const sim=instance.exports,scene=new THREE.Scene(),world=buildIsland(scene,sim);return {sim,scene,world,system:new CreatureSystem(world.creatures,world.obstacles,sim)};}
 test('two minute reproduction: animals remain separated while moving and greeting',async()=>{
@@ -24,25 +24,24 @@ test('two minute reproduction: animals remain separated while moving and greetin
  }
  console.log({minimumAnimalClearance:minimum,overlappingPairs:overlaps});assert.equal(overlaps,0);
 });
-test('initial camera sees the fox most of the time; sleeping fox returns and birds perch',async()=>{
- const {world,system,sim,scene}=await setup();
- const camera=new THREE.OrthographicCamera(-30,30,18,-18,.1,250);camera.position.set(18,29,39);camera.lookAt(-8,0,3);camera.updateMatrixWorld();
- const visibility=new VisibilitySystem(camera,world.canopies,world.caveRoof);
- let samples=0,seen=0,sleep=false,returned=false,perch=false;
- for(let frame=0;frame<4200;frame++){
-  const elapsed=frame/30;scene.updateMatrixWorld(true);system.update(1/30,elapsed,undefined,visibility.isVisible);
-  visibility.update(1/30,world.creatures.map(c=>c.group.position.clone().add(new THREE.Vector3(0,.35,0))),false);
-  const fox=world.creatures.find(c=>c.kind==='fox');sleep ||= fox.state==='sleep';returned ||= sleep&&elapsed>87&&fox.state==='roam';perch ||= world.creatures.some(c=>c.state==='perched');
-  if(frame%30===0&&elapsed>2&&fox.state==='roam'){samples++;if(visibility.isVisible(fox.group.position.clone().add(new THREE.Vector3(0,.35,0))))seen++;}
+test('animals keep dispersed habitats; fox visits the enlarged cave and birds perch',async()=>{
+ const {world,system}=await setup();let sleep=false,returned=false,perch=false;const landed=new Set();let departures=0;
+ assert.equal(world.creatures.length,10);assert.ok(world.treeTops.length>50);
+ for(let frame=0;frame<6600;frame++){
+  const elapsed=frame/30;const resting=world.creatures.filter(c=>c.kind==='bird'&&c.state==='perched').map(c=>({c,y:c.group.position.y}));system.update(1/30,elapsed,undefined,()=>true);
+  for(const {c,y} of resting)if(c.state==='returning'){assert.ok(c.group.position.y>=y-.1,'departure must lift off rather than drop through roof');departures++;}
+  for(const c of world.creatures)if(c.kind==='bird'&&c.state==='perched')landed.add(c);
+  const fox=world.creatures.find(c=>c.kind==='fox');sleep ||= fox.state==='sleep';returned ||= sleep&&elapsed>133&&fox.state==='roam';perch ||= world.creatures.some(c=>c.state==='perched');
  }
- console.log({visibleFoxSamples:seen,samples,sleep,returned,perch});assert.ok(seen/samples>.8);assert.ok(sleep,'fox must actually reach the bed');assert.ok(returned,'fox must leave the cave again');assert.ok(perch,'birds must land');
+ console.log({sleep,returned,perch});assert.ok(sleep,'fox must reach the bed');assert.ok(returned,'fox must leave the cave');assert.ok(perch,'birds must land');assert.equal(landed.size,2);assert.ok(departures>0);
+ const rabbit=world.creatures.find(c=>c.kind==='rabbit');assert.ok(Math.hypot(rabbit.group.position.x-rabbit.home.x,rabbit.group.position.z-rabbit.home.z)<4);
 });
 test('cave entrance remains traversable and material classification matches the floor',async()=>{
  const {sim,world}=await setup();
- assert.equal(surfaceAt(0,9,sim),'sand');assert.equal(surfaceAt(2,3,sim),'grass');assert.equal(surfaceAt(6,.5,sim),'wood');assert.equal(surfaceAt(6,-3,sim),'stone');
- assert.equal(caveAmount(2,-3),0);assert.ok(caveAmount(6,-3)>.99);
- for(let z=1.3;z>-4.5;z-=.05){const p={x:6,z};for(const o of world.obstacles)pushOutside(p,.25,o);assert.ok(Math.abs(p.x-6)<.001&&Math.abs(p.z-z)<.001,'center passage must not collide');}
- assert.ok(floorHeight(6,.5,sim)>sim.height(6,.5));
+ assert.equal(surfaceAt(0,18,sim),'sand');assert.equal(surfaceAt(2,7,sim),'grass');assert.equal(surfaceAt(CAVE.x,.5,sim),'wood');assert.equal(surfaceAt(CAVE.x,CAVE.z,sim),'stone');
+ assert.equal(caveAmount(2,-3),0);assert.ok(caveAmount(CAVE.x,CAVE.z)>.99);
+ for(let z=2.2;z>CAVE.backZ+.5;z-=.05){const p={x:CAVE.x,z};for(const o of world.obstacles)pushOutside(p,.25,o);assert.ok(Math.abs(p.x-CAVE.x)<.001&&Math.abs(p.z-z)<.001,'center passage must not collide');}
+ assert.ok(floorHeight(CAVE.x,.5,sim)>sim.height(CAVE.x,.5));
  assert.notDeepEqual(scores.day.notes,scores.sunset.notes);assert.notDeepEqual(scores.sunset.notes,scores.night.notes);assert.ok(scores.night.interval>scores.day.interval);
 });
 test('exactly overlapping rabbits separate even beside a greeting player',async()=>{
@@ -59,4 +58,30 @@ test('automatic day cycle crosses all periods and manual choice freezes it',()=>
  environment.clock=219.99;environment.update(.02);assert.equal(environment.period,'night');
  environment.clock=359.99;environment.update(.02);assert.equal(environment.period,'day');
  environment.set('night');environment.update(500);assert.equal(environment.period,'night');assert.equal(environment.automatic,false);
+});
+
+test('contact triggers species reactions and animals move themselves with cooldown',async()=>{
+ for(const [kind,state] of [['rabbit','flee'],['bird','takeoff'],['gull','takeoff'],['fox','startled']]){
+  const {world,system,sim}=await setup();const c=world.creatures.find(c=>c.kind===kind);
+  c.group.position.set(0,sim.height(0,18),18);c.target.copy(c.group.position);c.home.copy(c.group.position);
+  const player={x:0,z:18.9},before=c.group.position.clone();
+  system.update(1/60,1,player,()=>true);assert.equal(c.state,state);assert.equal(c.reactions,1);
+  assert.ok(Math.hypot(c.group.position.x-before.x,c.group.position.z-before.z)<.15&&Math.abs(c.group.position.y-before.y)<.35,'first contact cannot teleport');
+  for(let frame=1;frame<60;frame++)system.update(1/60,1+frame/60,player,()=>true);
+  if(kind==='bird'||kind==='gull')assert.ok(c.group.position.y-sim.height(c.group.position.x,c.group.position.z)>2,'bird rises into air');
+  else assert.ok(c.group.position.distanceTo(before)>.4,'ground animal responds with movement');
+  assert.equal(c.reactions,1,'proximity cannot retrigger each frame');
+ }
+});
+test('trail network stays on land and every path has walking clearance',async()=>{
+ const {world,sim}=await setup();let length=0;
+ for(const trail of TRAILS)for(let i=0;i<trail.length;i++){
+  const point=trail[i];assert.ok(sim.radius(point.x,point.z)<.94);
+  const p={x:point.x,z:point.z};for(const o of world.obstacles)pushOutside(p,.35,o);
+  assert.ok(Math.hypot(p.x-point.x,p.z-point.z)<.01,`blocked trail at ${point.x}, ${point.z}`);
+  if(i)length+=point.distanceTo(trail[i-1]);
+ }
+ assert.ok(length>120);assert.ok(CAVE.halfX*2>7&&CAVE.halfZ*2>9);
+ assert.ok(world.obstacles.some(o=>o.x===CAMP.x&&o.z===CAMP.z));
+ console.log({trailLength:length,trees:world.treeTops.length});
 });

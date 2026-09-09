@@ -1,18 +1,20 @@
+import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
+import { pathDistance } from './trails';
 import type { Simulation } from '../simulation';
 export interface Point { x: number; z: number }
 export interface Obstacle extends Point { radius: number; halfX?: number; halfZ?: number }
-export const CAVE = { x: 6, z: -3, halfX: 1.8, halfZ: 2.2, mouthZ: -.65, bed: { x: 5.35, z: -3.5 }, perch: { x: 6.7, z: -3.3 }, roofHeight: 3.65 };
+export const CAVE = { x: 13.2, z: -6.6, halfX: 3.65, halfZ: 4.6, mouthZ: -1.5, backZ:-11.5, bed: { x: 11.8, z: -8 }, perch: { x: 14.3, z: -7.2 }, roofHeight: 4.5 };
 export type Surface = 'sand' | 'grass' | 'stone' | 'wood';
 export function caveAmount(x: number, z: number): number {
-  const side = Math.min(1, Math.max(0, (CAVE.halfX - Math.abs(x - CAVE.x)) / .45));
-  const front = Math.min(1, Math.max(0, (CAVE.mouthZ + .7 - z) / 1.4));
-  return z < -5.15 ? 0 : side * front;
+  const side = Math.min(1, Math.max(0, (CAVE.halfX - Math.abs(x - CAVE.x)) / .6));
+  const front = Math.min(1, Math.max(0, (CAVE.mouthZ + .8 - z) / 2));
+  return z < CAVE.backZ ? 0 : side * front;
 }
 export function surfaceAt(x: number, z: number, sim: Simulation): Surface {
-  if (x > 4.25 && x < 7.75 && z > -.65 && z < 1.35) return 'wood';
+  if (x > CAVE.x-3.5 && x < CAVE.x+3.5 && z > CAVE.mouthZ && z < 2.3) return 'wood';
   if (caveAmount(x, z) > .1) return 'stone';
-  const angle = Math.atan2(z / 10.5, x / 13);
-  return sim.radius(x, z) > .76 + .035 * Math.sin(angle * 7) || (Math.abs(x + 1.8 * Math.sin(z * .43)) < .42 && z > -5) ? 'sand' : 'grass';
+  const angle = Math.atan2(z / ISLAND_Z, x / ISLAND_X);
+  return sim.radius(x, z) > .76 + .035 * Math.sin(angle * 7) || pathDistance(x,z)<.65 ? 'sand' : 'grass';
 }
 export function floorHeight(x: number, z: number, sim: Simulation): number {
   return sim.height(x, z) + (surfaceAt(x, z, sim) === 'wood' ? .11 : caveAmount(x,z) > .1 ? .035 : 0);
@@ -34,7 +36,7 @@ export function pushOutside(p: Point, radius: number, obstacle: Obstacle): void 
   }
 }
 export function validPosition(p: Point, radius: number, obstacles: Obstacle[], sim: Simulation): boolean {
-  if (sim.radius(p.x, p.z) > .94 - radius / 13) return false;
+  if (sim.radius(p.x, p.z) > .94 - radius / ISLAND_X) return false;
   for (const ob of obstacles) {
     if (ob.halfX !== undefined && ob.halfZ !== undefined) {
       if (Math.abs(p.x-ob.x) < ob.halfX+radius && Math.abs(p.z-ob.z) < ob.halfZ+radius) return false;
