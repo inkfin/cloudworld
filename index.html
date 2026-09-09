@@ -17,7 +17,10 @@
     </header>
     <main>
       <section class="intro" aria-labelledby="title"><div class="eyebrow"><span></span> A SMALL WORLD, A SLOW DAY</div><h1 id="title">岛屿来信<span class="seal" aria-label="云岛">云<br/>岛</span></h1><p class="english-title">Somewhere, quietly.</p><p class="intro-copy">把时间留在岸边。<br/>去林间走走，和偶遇的小生命打个招呼。</p><div class="island-caption"><span class="caption-line"></span><span>云端群岛 / 第一章</span></div></section>
-      <aside class="world-meta"><span class="sun-icon">☼</span><span>白昼 <i>·</i> 海风轻拂<small>THE ISLAND IS AWAKE</small></span></aside>
+      <aside class="world-meta"><span class="sun-icon" id="weather-icon">☼</span><span><span id="weather-label">白昼 · 海风轻拂</span><small id="weather-note">THE ISLAND IS AWAKE</small></span></aside>
+      <div class="time-controls" role="group" aria-label="岛屿时光"><button data-period="day" aria-pressed="true">白昼</button><button data-period="sunset" aria-pressed="false">夕阳</button><button data-period="night" aria-pressed="false">夜晚</button><button id="time-auto" aria-pressed="false" title="六分钟完成一次昼夜循环">流转</button></div>
+      <div class="cave-actions" id="cave-actions" hidden><span id="cave-note">风穿过洞口，潮声留在石壁上。</span><button id="shout-button"><kbd>Q</kbd> 向山洞喊一声</button></div>
+      <div id="echo-caption" class="echo-caption" role="status" hidden>喂——</div>
       <div class="location-tag" id="location"><span>⌁</span> 听潮海滩</div>
       <section class="entry" id="entry"><button id="enter-button" disabled><span id="enter-label">正在描绘小岛</span><span class="enter-arrow">↗</span></button><p id="load-status" role="status">海风正在来的路上…</p></section>
       <div id="interaction" class="interaction" hidden><button id="interact-button"><kbd>E</kbd><span>打个招呼</span></button></div>
@@ -26,8 +29,8 @@
       <div class="touch-controls" id="touch-controls" hidden><button data-move="up" aria-label="向前">↑</button><button data-move="left" aria-label="向左">←</button><button data-move="down" aria-label="向后">↓</button><button data-move="right" aria-label="向右">→</button></div>
     </main>
     <footer><div class="footer-left"><span class="status-dot"></span><span id="engine-status">PREPARING THE WORLD</span><span class="footer-separator">/</span><span>慢慢走，没关系。</span></div><div class="footer-controls"><button id="sound-button" aria-label="开启海浪与钢琴" aria-pressed="false"><span id="sound-icon">♫</span><span id="sound-label">声音关</span></button><button id="help-button" aria-label="操作说明">?</button><button id="view-button" aria-label="切换远景">⌖</button></div></footer>
-    <div class="walking-hint" id="walking-hint" hidden><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 漫步</span><span><kbd>Shift</kbd> 小跑</span><span>拖动环顾 · 滚轮缩放</span></div>
-    <dialog id="info-dialog"><button class="close-dialog" aria-label="关闭">×</button><span class="eyebrow">FIELD NOTES / 001</span><h2>给自己，留一座岛。</h2><p>Cloudworld 是一些个人世界的集合。这是第一座：一片树林、一圈沙滩、一个能听见海的岩洞。</p><p>你是戴着草帽的小孩。用 <kbd>W A S D</kbd> 或方向键散步，按住 <kbd>Shift</kbd> 小跑。拖动环顾、滚轮缩放。靠近小动物后按 <kbd>E</kbd>，把相遇记进手札。</p><p>右下角可以开启海浪和轻柔的合成钢琴。触屏设备可使用屏幕方向键，双指缩放。</p><div class="dialog-note">白昼习作 · 程序化的水墨与赛璐珞<br/>Three.js / WebGPU / WebAssembly<br/>原创程序化模型与合成音景，无外部素材。</div></dialog>
+    <div class="walking-hint" id="walking-hint" hidden><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 漫步</span><span><kbd>Shift</kbd> 小跑</span><span><kbd>Q</kbd> 喊一声</span><span>拖动环顾 · 滚轮缩放</span></div>
+    <dialog id="info-dialog"><button class="close-dialog" aria-label="关闭">×</button><span class="eyebrow">FIELD NOTES / 001</span><h2>给自己，留一座岛。</h2><p>Cloudworld 是一些个人世界的集合。这是第一座：一片树林、一圈沙滩、一个能听见海的岩洞。</p><p>你是戴着草帽的小孩。用 <kbd>W A S D</kbd> 或方向键散步，按住 <kbd>Shift</kbd> 小跑。拖动环顾、滚轮缩放。靠近小动物后按 <kbd>E</kbd>，把相遇记进手札。</p><p>右下角开启声音后，不同地面会响起不同脚步声。走上木平台进入岩洞，按 <kbd>Q</kbd> 或洞内按钮喊一声，听声音从石壁间返回。触屏可用方向键和双指缩放。</p><p>右上方切换白昼、夕阳或夜晚，琴曲会随之变化。「流转」开启六分钟昼夜循环。狐狸偶尔回洞小睡，小鸟也会落到洞顶休息。</p><div class="dialog-note">白昼习作 · 程序化的水墨与赛璐珞<br/>Three.js / WebGPU / WebAssembly<br/>原创程序化模型与合成音景，无外部素材。</div></dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
