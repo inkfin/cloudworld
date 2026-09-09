@@ -28,9 +28,19 @@
       <div id="journal" class="journal" hidden><span class="journal-label">岛上偶遇</span><span id="journal-count">0 / 7</span><div id="journal-dots"></div></div>
       <div class="touch-controls" id="touch-controls" hidden><button data-move="up" aria-label="向前">↑</button><button data-move="left" aria-label="向左">←</button><button data-move="down" aria-label="向后">↓</button><button data-move="right" aria-label="向右">→</button></div>
     </main>
-    <footer><div class="footer-left"><span class="status-dot"></span><span id="engine-status">PREPARING THE WORLD</span><span class="footer-separator">/</span><span>慢慢走，没关系。</span></div><div class="footer-controls"><button id="sound-button" aria-label="开启海浪与钢琴" aria-pressed="false"><span id="sound-icon">♫</span><span id="sound-label">声音关</span></button><button id="help-button" aria-label="操作说明">?</button><button id="view-button" aria-label="切换远景">⌖</button></div></footer>
+    <footer><div class="footer-left"><span class="status-dot"></span><span id="engine-status">PREPARING THE WORLD</span><span class="footer-separator">/</span><span>慢慢走，没关系。</span></div><div class="footer-controls"><button id="sound-button" aria-label="开启海浪与钢琴" aria-pressed="false"><span id="sound-icon">♫</span><span id="sound-label">声音关</span></button><button id="mix-button" aria-label="声音设置" title="声音设置">≋</button><button id="help-button" aria-label="操作说明">?</button><button id="view-button" aria-label="切换远景">⌖</button></div></footer>
     <div class="walking-hint" id="walking-hint" hidden><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 漫步</span><span><kbd>Shift</kbd> 小跑</span><span><kbd>Q</kbd> 喊一声</span><span>拖动环顾 · 滚轮缩放</span></div>
-    <dialog id="info-dialog"><button class="close-dialog" aria-label="关闭">×</button><span class="eyebrow">FIELD NOTES / 001</span><h2>给自己，留一座岛。</h2><p>Cloudworld 是一些个人世界的集合。这是第一座：一片树林、一圈沙滩、一个能听见海的岩洞。</p><p>你是戴着草帽的小孩。用 <kbd>W A S D</kbd> 或方向键散步，按住 <kbd>Shift</kbd> 小跑。拖动环顾、滚轮缩放。靠近小动物后按 <kbd>E</kbd>，把相遇记进手札。</p><p>右下角开启声音后，不同地面会响起不同脚步声。走上木平台进入岩洞，按 <kbd>Q</kbd> 或洞内按钮喊一声，听声音从石壁间返回。触屏可用方向键和双指缩放。</p><p>右上方切换白昼、夕阳或夜晚，琴曲会随之变化。「流转」开启六分钟昼夜循环。狐狸偶尔回洞小睡，小鸟也会落到洞顶休息。</p><div class="dialog-note">白昼习作 · 程序化的水墨与赛璐珞<br/>Three.js / WebGPU / WebAssembly<br/>原创程序化模型与合成音景，无外部素材。</div></dialog>
+    <dialog id="mix-dialog" aria-labelledby="mix-title">
+      <button id="close-mix" class="close-dialog" aria-label="关闭声音设置">×</button>
+      <span class="eyebrow">ISLAND SOUNDS</span><h2 id="mix-title">留一点安静。</h2>
+      <p>风声默认很轻。每种声音都可以单独调整。</p>
+      <div class="mix-row"><label for="volume-music">音乐</label><input id="volume-music" type="range" min="0" max="100" value="80" data-bus="music"><output for="volume-music">80%</output></div>
+      <div class="mix-row"><label for="volume-sea">海潮</label><input id="volume-sea" type="range" min="0" max="100" value="45" data-bus="sea"><output for="volume-sea">45%</output></div>
+      <div class="mix-row"><label for="volume-wind">风声</label><input id="volume-wind" type="range" min="0" max="100" value="15" data-bus="wind"><output for="volume-wind">15%</output></div>
+      <div class="mix-row"><label for="volume-steps">脚步</label><input id="volume-steps" type="range" min="0" max="100" value="70" data-bus="steps"><output for="volume-steps">70%</output></div>
+      <p class="dialog-note" id="sound-theme">白昼：轻盈分解和弦 · 近岸潮声 · 微风</p>
+    </dialog>
+    <dialog id="info-dialog"><button class="close-dialog" aria-label="关闭">×</button><span class="eyebrow">FIELD NOTES / 001</span><h2>给自己，留一座岛。</h2><p>Cloudworld 是一些个人世界的集合。这是第一座：一片树林、一圈沙滩、一个能听见海的岩洞。</p><p>你是戴着草帽的小孩。用 <kbd>W A S D</kbd> 或方向键散步，按住 <kbd>Shift</kbd> 小跑。拖动环顾、滚轮缩放。靠近小动物后按 <kbd>E</kbd>，把相遇记进手札。</p><p>右下角开启声音后，不同地面会响起不同脚步声。走上木平台进入岩洞，按 <kbd>Q</kbd> 或洞内按钮喊一声，听声音从石壁间返回。触屏可用方向键和双指缩放。</p><p>右上方切换白昼、夕阳或夜晚，琴曲会随之变化。「流转」开启六分钟昼夜循环。狐狸偶尔回洞小睡，小鸟也会落到洞顶休息。</p><div class="dialog-note">白昼习作 · 程序化的水墨与赛璐珞<br/>Three.js / WebGPU / WebAssembly<br/>程序化模型与琴曲；脚步、海潮采用 CC0 音频素材。<br/><a href="./audio/CREDITS.md" target="_blank" rel="noopener">音频来源与授权 ↗</a></div></dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

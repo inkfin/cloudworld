@@ -4,7 +4,7 @@ import './style.css';
 import { loadSimulation } from './simulation';
 import { buildIsland, type Creature } from './world/island';
 import { child, shadow, speciesNames, type Species } from './world/models';
-import { Soundscape } from './audio';
+import { Soundscape, type AudioBus } from './audio';
 import { Environment, periods, type TimeOfDay } from './environment';
 import { CreatureSystem } from './world/creatures';
 import { VisibilitySystem } from './world/visibility';
@@ -13,11 +13,21 @@ const $ = <T extends HTMLElement = HTMLElement>(id:string)=>document.getElementB
 const enter=$<HTMLButtonElement>('enter-button');
 const dialog=$<HTMLDialogElement>('info-dialog');
 const sound=new Soundscape();
+const mixDialog=$<HTMLDialogElement>('mix-dialog');
+$('mix-button').onclick=()=>mixDialog.showModal();$('close-mix').onclick=()=>mixDialog.close();
+try {
+  const saved=JSON.parse(localStorage.getItem('cloudworld-audio-mix')||'{}');
+  for(const bus of ['music','sea','wind','steps'] as AudioBus[])if(typeof saved[bus]==='number'&&Number.isFinite(saved[bus]))sound.setMix(bus,saved[bus]);
+}catch{ /* 浏览器禁用存储时保留默认混音。 */ }
+document.querySelectorAll<HTMLInputElement>('[data-bus]').forEach(input=>{
+  const bus=input.dataset.bus as AudioBus;input.value=String(Math.round(sound.state.mix[bus]*100));input.nextElementSibling!.textContent=`${input.value}%`;
+  input.oninput=()=>{sound.setMix(bus,Number(input.value)/100);input.nextElementSibling!.textContent=`${input.value}%`;try{localStorage.setItem('cloudworld-audio-mix',JSON.stringify(sound.state.mix));}catch{}};
+});
 $('about-button').onclick=$('help-button').onclick=()=>dialog.showModal();
 dialog.querySelector('button')!.onclick=()=>dialog.close();
 dialog.addEventListener('click',e=>{if(e.target===dialog){const r=dialog.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)dialog.close();}});
 $('sound-button').onclick=async()=>{
-  const button=$<HTMLButtonElement>('sound-button');button.disabled=true;
+  const button=$<HTMLButtonElement>('sound-button');button.disabled=true;$('sound-label').textContent='准备声音…';
   try{const on=await sound.toggle();button.setAttribute('aria-pressed',String(on));button.setAttribute('aria-label',on?'关闭海浪与钢琴':'开启海浪与钢琴');$('sound-label').textContent=on?'聆听小岛':'声音关';}
   catch{$('sound-label').textContent='声音暂不可用';}finally{button.disabled=false;}
 };
@@ -48,14 +58,14 @@ async function start(){
   $('journal-dots').innerHTML=kinds.map(k=>`<i title="${speciesNames[k]}" data-kind="${k}"></i>`).join('');
   function toast(text:string){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toastTimer);toastTimer=window.setTimeout(()=>$('toast').hidden=true,5200);}
   function greet(){
-    if(!exploring||!nearest||dialog.open)return;
+    if(!exploring||!nearest||dialog.open||mixDialog.open)return;
     found.add(nearest.kind);toast(nearest.state==='sleep'?'狐狸蜷在干燥的草窝里，耳朵轻轻动了一下。':nearest.state==='perched'?'小鸟收起翅膀，在洞顶的苔石上歇脚。':messages[nearest.kind]);
     $('journal-count').textContent=`${found.size} / 7`;$('journal-dots').querySelector(`[data-kind="${nearest.kind}"]`)?.classList.add('found');
   }
   function shout(){
     if(!exploring||dialog.open)return;
     if(!sound.enabled){toast('先点右下角开启声音，再喊一声听听。');return;}
-    if(!sound.shout())return;
+    if(!sound.shout(caveAmount(sim.x(),sim.z())))return;
     const caption=$('echo-caption');caption.hidden=false;caption.textContent=caveAmount(sim.x(),sim.z())>.2?'喂—— ··· 喂——':'喂——';
     caption.style.animation='none';void caption.offsetWidth;caption.style.animation='';clearTimeout(echoTimer);echoTimer=window.setTimeout(()=>caption.hidden=true,2450);
   }
@@ -65,6 +75,7 @@ async function start(){
   let lastPeriod='';
   function updateTimeUI(){
     const p=environment.period;document.body.dataset.time=p;
+    $('sound-theme').textContent=p==='day'?'白昼：轻盈分解和弦 · 近岸潮声 · 微风':p==='sunset'?'夕阳：温暖低音和弦 · 拉长的退潮 · 轻风': '夜晚：稀疏柔音 · 更远更慢的海潮 · 极轻的风';
     $('weather-icon').textContent=periods[p].icon;$('weather-label').textContent=`${periods[p].label} · ${p==='night'?'晚风拂岸':p==='sunset'?'风渐渐轻了':'海风轻拂'}`;
     $('weather-note').textContent=p==='day'?'THE ISLAND IS AWAKE':p==='sunset'?'THE LIGHT LINGERS':'UNDER THE SAME MOON';
     document.querySelectorAll<HTMLButtonElement>('[data-period]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.period===p)));
@@ -72,9 +83,9 @@ async function start(){
   }
   updateTimeUI();
   const moveCodes=['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','ShiftLeft','ShiftRight'];
-  window.addEventListener('keydown',e=>{if(dialog.open)return;if(moveCodes.includes(e.code)){keys.add(e.code);if(exploring)e.preventDefault();}if(!e.repeat){if(e.code==='KeyE')greet();if(e.code==='KeyQ')shout();}});
+  window.addEventListener('keydown',e=>{if(dialog.open||mixDialog.open)return;if(moveCodes.includes(e.code)){keys.add(e.code);if(exploring)e.preventDefault();}if(!e.repeat){if(e.code==='KeyE')greet();if(e.code==='KeyQ')shout();}});
   window.addEventListener('keyup',e=>keys.delete(e.code));window.addEventListener('blur',()=>keys.clear());
-  document.addEventListener('visibilitychange',()=>{keys.clear();sound.update(0,{period:environment.period,cave:0,wind:0,distance:0,surface:'sand',running:false,paused:document.hidden});});
+  document.addEventListener('visibilitychange',()=>{keys.clear();sound.update(0,{period:environment.period,cave:exploring?caveAmount(sim.x(),sim.z()):0,wind:environment.wind,distance:0,surface:surfaceAt(sim.x(),sim.z(),sim),running:false,paused:document.hidden});});
   const touchMap:Record<string,string>={up:'KeyW',left:'KeyA',down:'KeyS',right:'KeyD'};
   document.querySelectorAll<HTMLButtonElement>('[data-move]').forEach(b=>{
     b.onpointerdown=e=>{b.setPointerCapture(e.pointerId);keys.add(touchMap[b.dataset.move!]);};
@@ -103,7 +114,7 @@ async function start(){
     if(document.hidden)return;
     elapsed+=dt;environment.update(dt);if(lastPeriod!==environment.period)updateTimeUI();
     let ix=0,iz=0;
-    if(exploring&&!dialog.open){ix=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));iz=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));}
+    if(exploring&&!dialog.open&&!mixDialog.open){ix=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));iz=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));}
     const running=keys.has('ShiftLeft')||keys.has('ShiftRight'),oldX=sim.x(),oldZ=sim.z();
     camera.getWorldDirection(forward);forward.y=0;forward.normalize();right.crossVectors(forward,up).normalize();
     sim.step(right.x*ix+forward.x*iz,right.z*ix+forward.z*iz,dt,Number(running));
@@ -132,12 +143,12 @@ async function start(){
     if(exploring){
       nearest=undefined;let best=2.2;
       for(const c of world.creatures){const d=Math.hypot(c.group.position.x-px,c.group.position.z-pz);if(d<best&&Math.abs(c.group.position.y-py)<2.3){best=d;nearest=c;}}
-      $('interaction').hidden=!nearest||dialog.open;
+      $('interaction').hidden=!nearest||dialog.open||mixDialog.open;
       if(nearest)$('interact-button').querySelector('span')!.textContent=nearest.state==='sleep'?'轻轻看看睡着的狐狸':`和${speciesNames[nearest.kind]}打个招呼`;
       const surface=surfaceAt(px,pz,sim),location=cave>.15?'回声岩洞':surface==='wood'?'听风木台':surface==='sand'?'听潮海滩':'青苔森林';
-      $('location').innerHTML=`<span>⌁</span> ${location}`;$('cave-actions').hidden=cave<.08||dialog.open;
+      $('location').innerHTML=`<span>⌁</span> ${location}`;$('cave-actions').hidden=cave<.08||dialog.open||mixDialog.open;
     }
-    sound.update(dt,{period:environment.period,cave:exploring?cave:0,wind:environment.wind,distance:exploring&&!dialog.open?distance:0,surface:surfaceAt(px,pz,sim),running,paused:document.hidden});
+    sound.update(dt,{period:environment.period,cave:exploring?cave:0,wind:environment.wind,distance:exploring&&!dialog.open&&!mixDialog.open?distance:0,surface:surfaceAt(px,pz,sim),running,paused:document.hidden});
     renderer.render(scene,camera);
     frames++;statusTime+=dt;if(statusTime>1){fps=Math.round(frames/statusTime);frames=0;statusTime=0;}
     (window as any).__island={ready:true,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state})),drawCalls:renderer.info.render.calls};

@@ -27,9 +27,9 @@ test('WebGPU scene, walking, animal greeting, audio and dialogs', async ({ page 
   await page.getByRole('button', { name: '关闭海浪与钢琴' }).click();
   await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
   await page.getByRole('button', { name: '操作说明' }).click();
-  await expect(page.locator('dialog')).toBeVisible();
+  await expect(page.locator('#info-dialog')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.locator('dialog')).not.toBeVisible();
+  await expect(page.locator('#info-dialog')).not.toBeVisible();
   await page.screenshot({ path: '.playwright/exploring.png' });
   expect(errors).toEqual([]);
 });
