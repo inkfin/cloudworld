@@ -28,7 +28,7 @@ test('animals keep dispersed habitats; fox visits the enlarged cave and birds pe
  const {world,system}=await setup();let sleep=false,returned=false,perch=false;const landed=new Set();let departures=0;
  assert.equal(world.creatures.length,10);assert.ok(world.treeTops.length>50);
  for(let frame=0;frame<6600;frame++){
-  const elapsed=frame/30;const resting=world.creatures.filter(c=>c.kind==='bird'&&c.state==='perched').map(c=>({c,y:c.group.position.y}));system.update(1/30,elapsed,undefined,()=>true);
+  const elapsed=frame/30;const resting=world.creatures.filter(c=>c.kind==='bird'&&c.state==='perched').map(c=>({c,y:c.group.position.y}));system.update(1/30,elapsed,undefined,()=>true,elapsed<80||elapsed>=180?'day':elapsed<140?'sunset':'night');
   for(const {c,y} of resting)if(c.state==='returning'){assert.ok(c.group.position.y>=y-.1,'departure must lift off rather than drop through roof');departures++;}
   for(const c of world.creatures)if(c.kind==='bird'&&c.state==='perched')landed.add(c);
   const fox=world.creatures.find(c=>c.kind==='fox');sleep ||= fox.state==='sleep';returned ||= sleep&&elapsed>133&&fox.state==='roam';perch ||= world.creatures.some(c=>c.state==='perched');
@@ -84,4 +84,32 @@ test('trail network stays on land and every path has walking clearance',async()=
  assert.ok(length>120);assert.ok(CAVE.halfX*2>7&&CAVE.halfZ*2>9);
  assert.ok(world.obstacles.some(o=>o.x===CAMP.x&&o.z===CAMP.z));
  console.log({trailLength:length,trees:world.treeTops.length});
+});
+
+test('complete day sunset night cycle changes actual rest and movement without teleporting',async()=>{
+ const {world,system}=await setup();let elapsed=0;
+ const run=(period,seconds)=>{for(let i=0;i<seconds*30;i++){elapsed+=1/30;system.update(1/30,elapsed,undefined,()=>true,period);}};
+ const of=kind=>world.creatures.filter(c=>c.kind===kind);
+ run('day',70);assert.equal(of('fox')[0].state,'sleep');assert.equal(of('isopod')[0].state,'sleep');
+ const before=world.creatures.map(c=>c.group.position.clone());run('sunset',1/30);
+ world.creatures.forEach((c,i)=>assert.ok(c.group.position.distanceTo(before[i])<.35,'time change cannot teleport'));
+ run('sunset',65);assert.ok(of('bird').every(c=>c.state==='perched'));assert.ok(of('butterfly').every(c=>c.state==='sleep'));assert.equal(of('gull')[0].state,'sleep');assert.equal(of('fox')[0].state,'roam');
+ run('night',60);assert.ok(of('rabbit').every(c=>c.state==='sleep'));assert.ok(of('bird').every(c=>c.state==='perched'));
+ const fox=of('fox')[0],isopod=of('isopod')[0];let foxDistance=0,isopodDistance=0;
+ for(let i=0;i<900;i++){const f=fox.group.position.clone(),s=isopod.group.position.clone();run('night',1/30);foxDistance+=f.distanceTo(fox.group.position);isopodDistance+=s.distanceTo(isopod.group.position);}
+ assert.ok(foxDistance>5);assert.ok(isopodDistance>1);
+ // Dawn wakes resting animals and redirects the fox back through the cave entrance.
+ run('day',65);assert.ok(of('rabbit').every(c=>c.state==='roam'));assert.ok(of('butterfly').every(c=>c.state==='roam'));assert.equal(fox.state,'sleep');assert.equal(isopod.state,'sleep');
+ console.log({foxNightTravel:foxDistance,isopodNightTravel:isopodDistance});
+});
+test('sleeping animals still react and resume the schedule after disturbance',async()=>{
+ const {world,system}=await setup();let elapsed=0;
+ const run=(seconds,player)=>{for(let i=0;i<seconds*30;i++){elapsed+=1/30;system.update(1/30,elapsed,player,()=>true,'night');}};
+ run(60);const rabbit=world.creatures.find(c=>c.kind==='rabbit');assert.equal(rabbit.state,'sleep');
+ run(1/30,{x:rabbit.group.position.x+.9,z:rabbit.group.position.z});assert.equal(rabbit.state,'flee');
+ run(45);assert.equal(rabbit.state,'sleep');
+ // Repeated clicks must converge to the last selected period.
+ for(let i=0;i<20;i++)system.update(1/30,elapsed,undefined,()=>true,i%2?'night':'day');
+ for(let i=0;i<150;i++)system.update(1/30,elapsed,undefined,()=>true,'sunset');
+ assert.ok(world.creatures.every(c=>c.period==='sunset'));
 });

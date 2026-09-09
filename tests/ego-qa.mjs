@@ -48,6 +48,7 @@ await page.waitForFunction(()=>window.__island.audio.period==='sunset');
 console.log({audio:await page.evaluate(()=>window.__island.audio)});
 await page.click('loc=css:#sound-button');
 await page.waitForFunction(()=>!window.__island.audio.enabled);
+await page.click('loc=css:[data-period="day"]');
 // Approach actual roaming animals; do not reposition the animals or inject their state.
 for(const [kind,state] of [['rabbit','flee'],['bird','takeoff'],['fox','startled']]){
  await page.evaluate(()=>window.__islandTest.time(1));
@@ -57,6 +58,13 @@ for(const [kind,state] of [['rabbit','flee'],['bird','takeoff'],['fox','startled
  if(kind==='bird')await page.waitForFunction(()=>{const c=window.__island.creatures.find(c=>c.kind==='bird');return c.y>window.__island.position.y+1.8;});
  console.log({reaction:kind,state:await page.evaluate(kind=>window.__island.creatures.find(c=>c.kind===kind),kind)});
 }
+await page.evaluate(()=>window.__islandTest.warp(0,18));
+await page.click('loc=css:[data-period="night"]');
+await page.waitForFunction(()=>window.__island.creatures.every(c=>c.period==='night'&&(['rabbit','gull','butterfly'].includes(c.kind)?c.state==='sleep':c.kind==='bird'?c.state==='perched':true)),undefined,{timeout:35000});
+assert(await page.evaluate(()=>window.__island.creatures.find(c=>c.kind==='fox').activity==='patrol'),'fox patrols at night');
+console.log({nightRoutines:await page.evaluate(()=>window.__island.creatures.map(({kind,state,activity})=>({kind,state,activity})))});
+await page.click('loc=css:[data-period="day"]');
+await page.waitForFunction(()=>window.__island.creatures.find(c=>c.kind==='fox').state==='sleep'&&window.__island.creatures.filter(c=>c.kind==='rabbit').every(c=>c.state==='roam'),undefined,{timeout:35000});
 await page.click('loc=css:#help-button');
 assert(await page.evaluate(()=>document.querySelector('#info-dialog').open),'help opens');await page.keyboard.press('Escape');
 assert(await page.evaluate(()=>!document.querySelector('#info-dialog').open),'help closes');
@@ -76,5 +84,5 @@ const settle=await page.evaluate(()=>window.__island.elapsed);await page.waitFor
 await page.screenshot({path:`${root}/.playwright/mobile-cave-v2.png`});
 assert(await page.evaluate(()=>document.documentElement.scrollWidth===390),'no mobile overflow');
 assert((await page.evaluate(()=>window.__qaErrors)).length===0,'mobile runtime errors');
-console.log('PASS: WebGPU, time controls, four surfaces, cave echo, animal contact reactions, audio changes, mute, help, touch movement, mobile layout.');
+console.log('PASS: WebGPU, time controls, four surfaces, cave echo, animal contact reactions and day/night routines, audio changes, mute, help, touch movement, mobile layout.');
 if(!keep)await task.finish({keep:[]});

@@ -1,3 +1,5 @@
+import type { TimeOfDay } from '../environment';
+import { routines } from './routines';
 import * as THREE from 'three/webgpu';
 import type { Creature } from './island';
 import type { Simulation } from '../simulation';
@@ -6,12 +8,24 @@ import { ISLAND_X } from '../../shared/terrain';
 export type VisibilityQuery = (point: THREE.Vector3) => boolean;
 export class CreatureSystem {
   private seed = 7719;
-  constructor(readonly creatures: Creature[], private obstacles: Obstacle[], private sim: Simulation) {}
+  private period:TimeOfDay='day';
+  constructor(readonly creatures: Creature[], private obstacles: Obstacle[], private sim: Simulation) {
+    // Find a clear resting patch once; animals walk back to it rather than snapping home.
+    for(const c of creatures)for(let i=0;i<80;i++){
+      const a=i*2.4,r=i*.035,p={x:c.home.x+Math.cos(a)*r,z:c.home.z+Math.sin(a)*r};
+      if(validPosition(p,c.radius+.15,obstacles,sim)){c.rest.set(p.x,floorHeight(p.x,p.z,sim),p.z);break;}
+    }
+  }
   private random() { this.seed=(Math.imul(this.seed,1664525)+1013904223)|0;return (this.seed>>>0)/4294967296; }
-  update(dt: number, elapsed: number, player: Point | undefined, visible: VisibilityQuery) {
+  update(dt: number, elapsed: number, player: Point | undefined, visible: VisibilityQuery, period:TimeOfDay = 'day') {
     dt=Math.min(dt,.05);
+    if(period!==this.period){this.period=period;for(const c of this.creatures)c.scheduleIn=.3+c.phase*.45;}
     for (const c of this.creatures) {
       const p=c.group.position, previous=c.state;
+      c.scheduleIn=Math.max(0,c.scheduleIn-dt);
+      if(c.scheduleIn===0&&c.period!==period){c.period=period;c.decisionIn=0;}
+      const routine=routines[c.kind][c.period];
+      c.activity=routine.activity;c.pace+=(routine.pace-c.pace)*(1-Math.exp(-dt*2));
       const bird=c.kind==='bird'||c.kind==='gull';
       const proximity=player?Math.hypot(p.x-player.x,p.z-player.z):Infinity;
       if(proximity>2.6)c.cooldown=Math.max(0,c.cooldown-dt);
@@ -23,8 +37,8 @@ export class CreatureSystem {
         this.escape(c,player!);
       }
       const reacting=c.reactionTime>0;
-      const foxRest=c.kind==='fox'&&elapsed%160>80&&elapsed%160<133;
-      const birdRest=c.kind==='bird'&&(elapsed+c.phase*2)%85>25&&(elapsed+c.phase*2)%85<60;
+      const foxRest=c.kind==='fox'&&c.period==='day';
+      const birdRest=c.kind==='bird'&&(routine.activity==='roost'||((elapsed+c.phase*2)%85>25&&(elapsed+c.phase*2)%85<60));
       if(!reacting){
         if(foxRest){
           c.state=Math.hypot(p.x-CAVE.bed.x,p.z-CAVE.bed.z)<.2?'sleep':'returning';
@@ -36,7 +50,10 @@ export class CreatureSystem {
           const offset=this.creatures.filter(a=>a.kind==='bird').indexOf(c)*1.6;
           c.target.set(CAVE.perch.x-offset,this.sim.height(CAVE.x,CAVE.z)+CAVE.roofHeight+.13,CAVE.perch.z);
           c.state=p.distanceTo(c.target)<.15?'perched':'perching';
-        }else if(bird&&(['perched','perching','takeoff','returning'].includes(previous))&&Math.hypot(p.x-c.home.x,p.z-c.home.z)>.3){
+        }else if(routine.activity==='rest'){
+          c.target.copy(c.rest);
+          c.state=Math.hypot(p.x-c.rest.x,p.z-c.rest.z)<.15?'sleep':'returning';
+        }else if(bird&&(['sleep','perched','perching','takeoff','returning'].includes(previous))&&Math.hypot(p.x-c.home.x,p.z-c.home.z)>.3){
           c.state='returning';c.target.copy(c.home);
         }else{
           c.state='roam';if(previous!=='roam')c.decisionIn=0;
@@ -47,9 +64,10 @@ export class CreatureSystem {
           }
         }
       }
-      const airborne=(bird&&c.state==='returning')||c.kind==='butterfly'||c.state==='takeoff'||c.state==='perching'||c.state==='perched';
+      const airborne=(bird&&c.state==='returning')||(c.kind==='butterfly'&&c.state!=='sleep')||c.state==='takeoff'||c.state==='perching'||c.state==='perched';
       const dx=c.target.x-p.x,dz=c.target.z-p.z,distance=Math.hypot(dx,dz);
       let rate=c.kind==='fox'?1.35:c.kind==='rabbit'?.65:bird?.65:c.kind==='butterfly'?.8:.35;
+      rate*=c.pace;
       if(c.state==='flee')rate=c.kind==='rabbit'?3.5:1.5;
       if(c.state==='takeoff'||c.state==='perching'||(bird&&c.state==='returning'))rate=3.8;
       if(c.state==='startled')rate=c.reactionTime>1.15?.7:1.6;
@@ -70,13 +88,14 @@ export class CreatureSystem {
       const floor=floorHeight(p.x,p.z,this.sim);
       const overCave=Math.abs(p.x-CAVE.x)<5.3&&Math.abs(p.z-CAVE.z)<5.7;
       const flightFloor=overCave?this.sim.height(CAVE.x,CAVE.z)+CAVE.roofHeight+1:floor+2.7;
-      const targetY=c.state==='perching'||c.state==='perched'?c.target.y:(c.state==='takeoff'||(bird&&c.state==='returning'))?flightFloor:floor+(c.kind==='butterfly'?.85+Math.sin(elapsed*2+c.phase)*.12:0);
+      const targetY=c.state==='perching'||c.state==='perched'?c.target.y:(c.state==='takeoff'||(bird&&c.state==='returning'))?flightFloor:floor+(c.kind==='butterfly'?(c.state==='sleep'?.15:.85+Math.sin(elapsed*2+c.phase)*.12):0);
       if(bird||c.kind==='butterfly')p.y+=(targetY-p.y)*(1-Math.exp(-dt*(c.state==='takeoff'?7:3)));
       else p.y=targetY;
+      c.group.rotation.x=c.state==='roam'&&distance<.25&&routine.activity==='forage'?Math.max(0,Math.sin(elapsed*3+c.phase))*.13:0;
       c.group.rotation.z=c.state==='startled'?Math.sin((1.8-c.reactionTime)*19)*.28*Math.min(1,c.reactionTime):0;
       if(c.kind==='rabbit'&&c.state==='flee')p.y+=Math.abs(Math.sin(elapsed*15+c.phase))*.24;
-      c.group.scale.y+=((c.state==='sleep'?.52:1)-c.group.scale.y)*Math.min(1,dt*3);
-      c.wings.forEach((w,i)=>{const folded=bird&&!airborne;w.rotation.z=folded?(i===0?.1:-.1):Math.sin(elapsed*(c.state==='takeoff'?18:c.kind==='butterfly'?11:8)+c.phase)*.8*(i===0?1:-1);w.scale.x+=((folded?.3:1)-w.scale.x)*Math.min(1,dt*8);});
+      c.group.scale.y+=((c.state==='sleep'?(c.kind==='fox'?.52:.75)+Math.sin(elapsed*1.6+c.phase)*.012:1)-c.group.scale.y)*Math.min(1,dt*3);
+      c.wings.forEach((w,i)=>{const folded=c.state==='sleep'||c.state==='perched'||(bird&&!airborne);w.rotation.z=folded?(c.kind==='butterfly'?1.3:.1)*(i===0?1:-1):Math.sin(elapsed*(c.state==='takeoff'?18:c.kind==='butterfly'?11:8)+c.phase)*.8*(i===0?1:-1);w.scale.x+=((folded?.3:1)-w.scale.x)*Math.min(1,dt*8);});
     }
     for(let iteration=0;iteration<6;iteration++){
       for(let i=0;i<this.creatures.length;i++)for(let j=i+1;j<this.creatures.length;j++){
@@ -109,7 +128,7 @@ export class CreatureSystem {
   private pickTarget(c: Creature, player: Point|undefined, visible: VisibilityQuery){
     let score=-Infinity,best:THREE.Vector3|undefined;
     for(let i=0;i<16;i++){
-      const angle=this.random()*Math.PI*2,radius=.5+this.random()*(c.roaming+1.1);
+      const angle=this.random()*Math.PI*2,radius=.5+this.random()*(c.roaming*routines[c.kind][c.period].range+1.1);
       const point=new THREE.Vector3(c.home.x+Math.cos(angle)*radius,0,c.home.z+Math.sin(angle)*radius);
       if(!validPosition(point,c.radius+.1,this.obstacles,this.sim))continue;
       if(c.kind==='fox'&&point.z<3.4)continue;

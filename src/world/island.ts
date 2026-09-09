@@ -1,3 +1,5 @@
+import type { TimeOfDay } from '../environment';
+import type { Activity } from './routines';
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import { TRAILS, CAMP, MEADOW, pathDistance } from './trails';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -7,7 +9,7 @@ import { ink, oceanMaterial } from './materials';
 import { CAVE, type Obstacle } from './spatial';
 export type { Obstacle } from './spatial';
 import { animal, blob, cube, limb, shadow, type Species } from './models';
-export interface Creature {kind: Species; group: THREE.Group; wings: THREE.Object3D[]; home: THREE.Vector3; phase: number; roaming: number; radius: number; state: 'roam'|'returning'|'sleep'|'perching'|'perched'|'flee'|'startled'|'takeoff'; reactionTime: number; cooldown: number; reactions: number; target: THREE.Vector3; hiddenFor: number; decisionIn: number;}
+export interface Creature {kind: Species; group: THREE.Group; wings: THREE.Object3D[]; home: THREE.Vector3; phase: number; roaming: number; radius: number; state: 'roam'|'returning'|'sleep'|'perching'|'perched'|'flee'|'startled'|'takeoff'; period: TimeOfDay; scheduleIn: number; activity: Activity; pace: number; rest: THREE.Vector3; reactionTime: number; cooldown: number; reactions: number; target: THREE.Vector3; hiddenFor: number; decisionIn: number;}
 
 export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   let seed=314159;
@@ -161,7 +163,7 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   const lantern=new THREE.Group();lantern.position.set(3.3,sim.height(3.3,-1.5),-1.5);scene.add(lantern);
   blob(lantern,'#919981',[0,.1,0],[.35,.12,.3],true);cube(lantern,'#9ca28b',[0,.35,0],[.18,.5,.18]);cube(lantern,'#c6c4a2',[0,.66,0],[.35,.28,.35]);cube(lantern,'#6d806c',[0,.66,.177],[.16,.16,.009]);const roof=new THREE.Mesh(new THREE.ConeGeometry(.36,.23,4),ink('#7e8c78'));roof.position.y=.92;roof.rotation.y=Math.PI/4;lantern.add(roof);
   const habitats:[Species,number,number,number][]=[['rabbit',-14,2.7,1.2],['rabbit',-10,-9,1],['fox',10,4.5,1.7],['gull',13,17,1.2],['bird',-5,6,1],['bird',2,-10,1],['butterfly',-16,0,1.1],['butterfly',-13,-1,1],['crab',-7,19,.8],['isopod',23,3,.55]];
-  for(const [kind,x,z,roaming] of habitats){const {group,wings}=animal(kind);group.position.set(x,sim.height(x,z),z);scene.add(group);creatures.push({kind,group,wings,home:group.position.clone(),phase:random()*6.28,roaming,radius:kind==='fox'?.62:kind==='rabbit'?.33:kind==='gull'?.43:kind==='bird'?.33:kind==='butterfly'?.21:.27,state:'roam',reactionTime:0,cooldown:0,reactions:0,target:group.position.clone(),hiddenFor:0,decisionIn:0});}
+  for(const [kind,x,z,roaming] of habitats){const {group,wings}=animal(kind);group.position.set(x,sim.height(x,z),z);scene.add(group);creatures.push({kind,group,wings,home:group.position.clone(),phase:random()*6.28,roaming,radius:kind==='fox'?.62:kind==='rabbit'?.33:kind==='gull'?.43:kind==='bird'?.33:kind==='butterfly'?.21:.27,state:'roam',period:'day',scheduleIn:0,activity:'forage',pace:1,rest:group.position.clone(),reactionTime:0,cooldown:0,reactions:0,target:group.position.clone(),hiddenFor:0,decisionIn:0});}
   // 空中海鸥只作环境，不占用地面动物的交互记录。
   const skyBirds: THREE.Group[]=[];
   for(let i=0;i<3;i++){const {group}=animal('gull');scene.add(group);skyBirds.push(group);}
