@@ -1,6 +1,7 @@
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
-import { color, float, mix, normalWorld, positionWorld, sin, time, vec3, smoothstep, uniform, cameraPosition, uv, screenUV, vec2 } from 'three/tsl';
+import type { ShaderNodeObject } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, uv, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#a4c9bb'));
@@ -9,17 +10,8 @@ export const foamColor=uniform(new THREE.Color('#f7f4dc'));
 export const sunDirection=uniform(new THREE.Vector3(-.45,.85,.35));
 export const sunsetStrength=uniform(0);
 export const moonStrength=uniform(0);
-export const skyAspect=uniform(1);
-// A distant disc composed into the backdrop, never a world-space solid.
-export function celestialWash(base: ReturnType<typeof color> | typeof skyColor) {
-  const p=screenUV.sub(vec2(.78,.22)).mul(vec2(skyAspect,1));
-  const r=p.length();
-  const disc=float(1).sub(smoothstep(.034,.036,r));
-  const halo=float(1).sub(smoothstep(.036,.12,r)).pow(3).mul(.15);
-  const mottling=sin(p.x.mul(170).add(sin(p.y.mul(110)))).mul(sin(p.y.mul(150))).mul(.025);
-  const lunar=color('#e6e5cd').mul(float(.96).add(mottling));
-  return mix(base,lunar,disc.mul(moonStrength)).add(color('#a5bac9').mul(halo).mul(moonStrength));
-}
+// Orthographic rays are parallel: use the camera direction, not eye-to-pixel rays.
+export const waterView=uniform(new THREE.Vector3(.48,.55,.68));
 const cache = new Map<string, THREE.MeshBasicNodeMaterial>();
 // 世界空间明暗分段与细颗粒，着色器通过 TSL 编译到 WGSL。
 export function ink(hex: string): THREE.MeshBasicNodeMaterial {
@@ -34,24 +26,57 @@ export function ink(hex: string): THREE.MeshBasicNodeMaterial {
   cache.set(hex, material);
   return material;
 }
+function waterNoise(p: ShaderNodeObject<THREE.Node>) {
+  const cell=p.floor(),f=p.fract(),u=f.mul(f).mul(float(3).sub(f.mul(2)));
+  const hash=(q: ShaderNodeObject<THREE.Node>)=>sin(q.dot(vec2(127.1,311.7))).mul(43758.5453).fract();
+  return mix(mix(hash(vec2(cell)),hash(vec2(cell.add(vec2(1,0)))),u.x),mix(hash(vec2(cell.add(vec2(0,1)))),hash(vec2(cell.add(1))),u.x),u.y);
+}
 export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
   const m = new THREE.MeshBasicNodeMaterial({ transparent: false, fog: false });
   const p = positionWorld;
   const a = p.z.div(ISLAND_Z).atan2(p.x.div(ISLAND_X));
   const radius = p.x.div(ISLAND_X).pow(2).add(p.z.div(ISLAND_Z).pow(2)).sqrt().div(sin(a.mul(5)).mul(.045).add(a.mul(3).cos().mul(.025)).add(1));
   const shore = smoothstep(1.02, 1.64, radius);
-  const far = smoothstep(1.5, 4, radius);
+  // Feather the near clip edge exposed by very wide orthographic framing.
+  const clipWash=float(1).sub(smoothstep(0,20,positionView.z.negate()));
+  const far = smoothstep(1.5, 4, radius).max(clipWash);
   const water = mix(waterNear, waterFar, shore);
   const wash = mix(water, skyColor, far);
-  const waves = sin(radius.mul(49).sub(time.mul(1.35)).add(sin(a.mul(9)).mul(.6)));
-  const foam = smoothstep(.91, .995, waves).mul(float(1).sub(smoothstep(1.12, 1.9, radius))).mul(smoothstep(.98, 1.05, radius));
-  const ripple = sin(p.x.mul(1.8).add(p.z.mul(3)).add(time.mul(.55))).mul(.0015).mul(float(1).sub(far));
-  // Tilted micro-normals break a warm reflection into moving horizontal facets.
-  const n=vec3(sin(p.x.mul(2.1).add(time.mul(.8))).mul(.055),1,sin(p.z.mul(5.5).sub(time.mul(1.2))).mul(.14)).normalize();
-  const halfVector=cameraPosition.sub(p).normalize().add(sunDirection.normalize()).normalize();
-  const glint=n.dot(halfVector).max(0).pow(110).mul(.42).add(n.dot(halfVector).max(0).pow(18).mul(.1));
+  // Broken, softly feathered shore wash, confined to the immediate beach.
+  const drift=sin(p.x.mul(.43).add(p.z.mul(.31)).sub(time.mul(.32)))
+    .add(sin(p.z.mul(.79).sub(p.x.mul(.16)).add(time.mul(.21))).mul(.45));
+  const waves=sin(radius.mul(66).sub(time.mul(.8)).add(drift.mul(1.7)));
+  const broken=smoothstep(-.45,.6,sin(a.mul(13).add(drift)).add(sin(p.x.mul(.6).sub(p.z.mul(.41))).mul(.6)));
+  const foam=smoothstep(.5,.97,waves).mul(broken)
+    .mul(float(1).sub(smoothstep(1.035,1.23,radius))).mul(smoothstep(.99,1.045,radius));
+  const swell=sin(p.x.mul(.27).add(p.z.mul(.46)).sub(time.mul(.27)))
+    .mul(sin(p.z.mul(.18).sub(p.x.mul(.12)).add(time.mul(.13))));
+  const grain=sin(p.z.mul(2.9).add(sin(p.x.mul(.72))).sub(time.mul(.5)));
+  const ripple=swell.mul(.0025).add(grain.mul(.0015)).mul(float(1).sub(far));
+  const n=vec3(sin(p.x.mul(1.2).add(time.mul(.45))).mul(.09),1,sin(p.z.mul(3.1).sub(time.mul(.65))).mul(.16)).normalize();
+  const halfVector=waterView.add(sunDirection.normalize()).normalize();
+  const glint=n.dot(halfVector).max(0).pow(80).mul(.35);
   const sunsetWater=mix(wash,color('#c89b99'),far.mul(.3).mul(sunsetStrength));
-  m.colorNode = celestialWash(mix(sunsetWater, foamColor, foam.mul(.58)).add(ripple).add(color('#ffe0a4').mul(glint).mul(smoothstep(-.65,.55,sin(p.x.mul(1.7).add(sin(p.z.mul(2.3))).add(time.mul(.4))))).mul(sunsetStrength).mul(smoothstep(1,1.13,radius))));
+  // A painterly reflection footprint on the sea, not a screen-space lunar disc.
+  // The virtual light height controls the length of the silver path.
+  const axis=waterView.xz.add(.0001).normalize();
+  const delta=p.xz.add(5).add(waterView.xz.div(waterView.y.max(.25)).mul(22));
+  const along=delta.dot(axis),across=delta.x.mul(axis.y).sub(delta.y.mul(axis.x));
+  const bend=sin(along.mul(.32).sub(time.mul(.3))).mul(.65);
+  const width=along.mul(.035).add(3.4).max(1.8);
+  const spread=across.add(bend).div(width).pow(2).negate().exp()
+    .mul(along.div(23).pow(2).negate().exp());
+  const turbulence=waterNoise(vec2(across.mul(.55),along.mul(.37).sub(time.mul(.12))));
+  const fragments=waterNoise(vec2(across.mul(1.9).add(time.mul(.06)),along.mul(2.2)));
+  const strokes=smoothstep(.1,.92,sin(along.mul(3.8).add(turbulence.mul(8)).sub(time.mul(.55))));
+  const gaps=smoothstep(.25,.75,fragments).mul(smoothstep(.15,.65,turbulence));
+  const silver=spread.mul(strokes.mul(gaps).mul(.68).add(.028));
+  const glow=across.div(8).pow(2).add(along.div(29).pow(2)).negate().exp().mul(.028);
+  const lunar=color('#cbdcda').mul(silver.add(glow)).mul(moonStrength)
+    .mul(smoothstep(1.015,1.12,radius));
+  m.colorNode=mix(sunsetWater,foamColor,foam.mul(.32)).add(ripple)
+    .add(color('#ffe0a4').mul(glint).mul(broken).mul(sunsetStrength).mul(smoothstep(1,1.13,radius)))
+    .add(lunar.mul(float(1).sub(clipWash)));
   return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }

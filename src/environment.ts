@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
-import {positionGeometry,vec4} from 'three/tsl';
-import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, duskCloudMaterial, celestialWash, moonStrength, skyAspect } from './world/materials';
+import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, duskCloudMaterial, moonStrength, waterView } from './world/materials';
 export type TimeOfDay = 'day'|'sunset'|'night';
 export const periods: Record<TimeOfDay,{label:string;sky:string;near:string;far:string;tint:string;foam:string;wind:number;icon:string}> = {
   day:{label:'白昼',sky:'#eeeade',near:'#a4c9bb',far:'#d4dfd1',tint:'#ffffff',foam:'#f7f4dc',wind:.55,icon:'☼'},
@@ -19,16 +18,12 @@ export class Environment {
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
     this.stars=new THREE.Points(geometry,this.starMaterial);scene.add(this.stars);
     this.clouds=new THREE.Mesh(new THREE.PlaneGeometry(150,26),duskCloudMaterial());this.clouds.position.set(-20,13,-40);this.clouds.rotation.y=.5;scene.add(this.clouds);
-    const skyMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false,fog:false});
-    skyMaterial.vertexNode=vec4(positionGeometry.xy,1,1);
-    skyMaterial.colorNode=celestialWash(skyColor);
-    const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(2,2),skyMaterial);
-    backdrop.name='Sky backdrop';backdrop.frustumCulled=false;backdrop.renderOrder=-10000;scene.add(backdrop);
+
   }
   set(period:TimeOfDay){this.period=period;this.automatic=false;}
   update(dt:number){
     if(this.automatic){this.clock=(this.clock+dt)%360;this.period=this.clock<150?'day':this.clock<220?'sunset':'night';}
-    skyAspect.value=this.camera.projectionMatrix.elements[5]/this.camera.projectionMatrix.elements[0];
+    this.camera.getWorldDirection(this.viewDirection);waterView.value.copy(this.viewDirection).negate();
     const p=periods[this.period],blend=1-Math.exp(-dt*.75);
     skyColor.value.lerp(new THREE.Color(p.sky),blend);waterNear.value.lerp(new THREE.Color(p.near),blend);waterFar.value.lerp(new THREE.Color(p.far),blend);worldTint.value.lerp(new THREE.Color(p.tint),blend);foamColor.value.lerp(new THREE.Color(p.foam),blend);
     sunDirection.value.lerp(this.period==='sunset'?new THREE.Vector3(-.7,.22,-.65):this.period==='night'?new THREE.Vector3(.2,.75,-.5):new THREE.Vector3(-.45,.85,.35),blend);
@@ -36,8 +31,6 @@ export class Environment {
     this.wind+=(p.wind-this.wind)*blend;
     this.starMaterial.opacity+=((this.period==='night'?.8:0)-this.starMaterial.opacity)*blend;
     sunsetStrength.value+=((this.period==='sunset'?1:0)-sunsetStrength.value)*blend;
-    // Looking down at the island should not leave a moon pasted onto the sea.
-    const skyView=1-THREE.MathUtils.smoothstep(-this.camera.getWorldDirection(this.viewDirection).y,.58,.82);
-    moonStrength.value+=((this.period==='night'?skyView:0)-moonStrength.value)*blend;
+    moonStrength.value+=((this.period==='night'?1:0)-moonStrength.value)*blend;
   }
 }
