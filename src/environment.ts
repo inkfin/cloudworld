@@ -26,7 +26,7 @@ export class Environment {
     this.camera.getWorldDirection(this.viewDirection);waterView.value.copy(this.viewDirection).negate();
     const p=periods[this.period],blend=1-Math.exp(-dt*.75);
     skyColor.value.lerp(new THREE.Color(p.sky),blend);waterNear.value.lerp(new THREE.Color(p.near),blend);waterFar.value.lerp(new THREE.Color(p.far),blend);worldTint.value.lerp(new THREE.Color(p.tint),blend);foamColor.value.lerp(new THREE.Color(p.foam),blend);
-    sunDirection.value.lerp(this.period==='sunset'?new THREE.Vector3(-.7,.22,-.65):this.period==='night'?new THREE.Vector3(.2,.75,-.5):new THREE.Vector3(-.45,.85,.35),blend);
+    sunDirection.value.lerp(this.period==='sunset'?new THREE.Vector3(-.7,.22,-.65):this.period==='night'?new THREE.Vector3(-.68,.66,-.32):new THREE.Vector3(-.45,.85,.35),blend);
     (this.scene.background as THREE.Color).copy(skyColor.value);(this.scene.fog as THREE.Fog).color.copy(skyColor.value);
     this.wind+=(p.wind-this.wind)*blend;
     this.starMaterial.opacity+=((this.period==='night'?.8:0)-this.starMaterial.opacity)*blend;

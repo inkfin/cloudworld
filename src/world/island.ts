@@ -15,7 +15,7 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   let seed=314159;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296;};
   const creatures: Creature[]=[]; const obstacles: Obstacle[]=[];
-  const ocean=new THREE.Mesh(new THREE.PlaneGeometry(500,500),oceanMaterial());ocean.rotation.x=-Math.PI/2;ocean.position.y=.02;scene.add(ocean);
+  const ocean=new THREE.Mesh(new THREE.PlaneGeometry(500,500,160,160),oceanMaterial());ocean.rotation.x=-Math.PI/2;ocean.position.y=.02;scene.add(ocean);
   // 同一张连续网格，沙滩与内陆使用顶点色过渡，避免层叠地表和碰撞不一致。
   const positions:number[]=[],colors:number[]=[],indices:number[]=[];
   const segments=224,rings=100;

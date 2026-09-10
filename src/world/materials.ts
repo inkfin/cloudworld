@@ -1,7 +1,8 @@
+import { WAVES, WATER_F0 } from './waves';
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
 import type { ShaderNodeObject } from 'three/tsl';
-import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, cameraPosition, uv, vec2 } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, positionLocal, fwidth, uv, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#a4c9bb'));
@@ -26,58 +27,65 @@ export function ink(hex: string): THREE.MeshBasicNodeMaterial {
   cache.set(hex, material);
   return material;
 }
-function waterNoise(p: ShaderNodeObject<THREE.Node>) {
-  const cell=p.floor(),f=p.fract(),u=f.mul(f).mul(float(3).sub(f.mul(2)));
-  const hash=(q: ShaderNodeObject<THREE.Node>)=>sin(q.dot(vec2(127.1,311.7))).mul(43758.5453).fract();
-  return mix(mix(hash(vec2(cell)),hash(vec2(cell.add(vec2(1,0)))),u.x),mix(hash(vec2(cell.add(vec2(0,1)))),hash(vec2(cell.add(1))),u.x),u.y);
+type N=ShaderNodeObject<THREE.Node>;
+function waveField(x:N,z:N,vertex=false){
+ let height: N=float(0),dx:N=float(0),dz:N=float(0);
+ for(const w of WAVES){
+  if(vertex&&!w.geometry)continue;
+  const phase=x.mul(w.x).add(z.mul(w.z)).mul(w.k).sub(time.mul(w.omega)).add(w.phase);
+  // Sub-pixel waves become roughness rather than flickering bright lines.
+  const resolved=vertex?float(1):float(1).sub(smoothstep(.8,2.8,fwidth(phase)));
+  height=height.add(sin(phase).mul(w.amplitude).mul(resolved));
+  const slope=phase.cos().mul(w.amplitude*w.k).mul(resolved);
+  dx=dx.add(slope.mul(w.x));dz=dz.add(slope.mul(w.z));
+ }
+ return {height,dx,dz};
+}
+function shoreRadius(x:N,z:N){
+ const a=z.div(ISLAND_Z).atan2(x.div(ISLAND_X));
+ return x.div(ISLAND_X).pow(2).add(z.div(ISLAND_Z).pow(2)).sqrt()
+  .div(sin(a.mul(5)).mul(.045).add(a.mul(3).cos().mul(.025)).add(1));
+}
+// GGX / Smith correlated visibility / Schlick Fresnel. Radiance is exposure-scaled.
+function waterSpecular(n:N,v:N,l:N,alpha:N){
+ const h=v.add(l).normalize(),nv=n.dot(v).max(.001),nl=n.dot(l).max(0),nh=n.dot(h).max(0),vh=v.dot(h).max(0);
+ const a2=alpha.mul(alpha),denom=nh.mul(nh).mul(a2.sub(1)).add(1);
+ const distribution=a2.div(denom.mul(denom).mul(Math.PI));
+ const visibility=float(.5).div(nl.mul(nv.mul(nv).mul(float(1).sub(a2)).add(a2).sqrt())
+  .add(nv.mul(nl.mul(nl).mul(float(1).sub(a2)).add(a2).sqrt())).max(.0001));
+ const fresnel=float(WATER_F0).add(float(1-WATER_F0).mul(float(1).sub(vh).pow(5)));
+ return distribution.mul(visibility).mul(fresnel).mul(nl);
 }
 export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
-  const m = new THREE.MeshBasicNodeMaterial({ transparent: false, fog: false });
-  const p = positionWorld;
-  const a = p.z.div(ISLAND_Z).atan2(p.x.div(ISLAND_X));
-  const radius = p.x.div(ISLAND_X).pow(2).add(p.z.div(ISLAND_Z).pow(2)).sqrt().div(sin(a.mul(5)).mul(.045).add(a.mul(3).cos().mul(.025)).add(1));
-  const shore = smoothstep(1.02, 1.64, radius);
-  // Feather the near clip edge exposed by very wide orthographic framing.
-  const clipWash=float(1).sub(smoothstep(0,20,positionView.z.negate()));
-  const far = smoothstep(1.5, 4, radius).max(clipWash);
-  const water = mix(waterNear, waterFar, shore);
-  const wash = mix(water, skyColor, far);
-  // Broken, softly feathered shore wash, confined to the immediate beach.
-  const drift=sin(p.x.mul(.43).add(p.z.mul(.31)).sub(time.mul(.32)))
-    .add(sin(p.z.mul(.79).sub(p.x.mul(.16)).add(time.mul(.21))).mul(.45));
-  const waves=sin(radius.mul(66).sub(time.mul(.8)).add(drift.mul(1.7)));
-  const broken=smoothstep(-.45,.6,sin(a.mul(13).add(drift)).add(sin(p.x.mul(.6).sub(p.z.mul(.41))).mul(.6)));
-  const foam=smoothstep(.5,.97,waves).mul(broken)
-    .mul(float(1).sub(smoothstep(1.035,1.23,radius))).mul(smoothstep(.99,1.045,radius));
-  const swell=sin(p.x.mul(.27).add(p.z.mul(.46)).sub(time.mul(.27)))
-    .mul(sin(p.z.mul(.18).sub(p.x.mul(.12)).add(time.mul(.13))));
-  const grain=sin(p.z.mul(2.9).add(sin(p.x.mul(.72))).sub(time.mul(.5)));
-  const ripple=swell.mul(.0025).add(grain.mul(.0015)).mul(float(1).sub(far));
-  const n=vec3(sin(p.x.mul(1.2).add(time.mul(.45))).mul(.09),1,sin(p.z.mul(3.1).sub(time.mul(.65))).mul(.16)).normalize();
-  const halfVector=cameraPosition.sub(p).normalize().add(sunDirection.normalize()).normalize();
-  const glint=n.dot(halfVector).max(0).pow(80).mul(.35);
-  const sunsetWater=mix(wash,color('#c89b99'),far.mul(.3).mul(sunsetStrength));
-  // A painterly reflection footprint on the sea, not a screen-space lunar disc.
-  // The virtual light height controls the length of the silver path.
-  const axis=waterView.xz.add(.0001).normalize();
-  const delta=p.xz.add(5).add(waterView.xz.div(waterView.y.max(.25)).mul(22));
-  const along=delta.dot(axis),across=delta.x.mul(axis.y).sub(delta.y.mul(axis.x));
-  const bend=sin(along.mul(.32).sub(time.mul(.3))).mul(.65);
-  const width=along.mul(.035).add(3.4).max(1.8);
-  const spread=across.add(bend).div(width).pow(2).negate().exp()
-    .mul(along.div(23).pow(2).negate().exp());
-  const turbulence=waterNoise(vec2(across.mul(.55),along.mul(.37).sub(time.mul(.12))));
-  const fragments=waterNoise(vec2(across.mul(1.9).add(time.mul(.06)),along.mul(2.2)));
-  const strokes=smoothstep(.1,.92,sin(along.mul(3.8).add(turbulence.mul(8)).sub(time.mul(.55))));
-  const gaps=smoothstep(.25,.75,fragments).mul(smoothstep(.15,.65,turbulence));
-  const silver=spread.mul(strokes.mul(gaps).mul(.68).add(.028));
-  const glow=across.div(8).pow(2).add(along.div(29).pow(2)).negate().exp().mul(.028);
-  const lunar=color('#cbdcda').mul(silver.add(glow)).mul(moonStrength)
-    .mul(smoothstep(1.015,1.12,radius));
-  m.colorNode=mix(sunsetWater,foamColor,foam.mul(.32)).add(ripple)
-    .add(color('#ffe0a4').mul(glint).mul(broken).mul(sunsetStrength).mul(smoothstep(1,1.13,radius)).mul(float(1).sub(clipWash)))
-    .add(lunar.mul(float(1).sub(clipWash)));
-  return m;
+ const m=new THREE.MeshBasicNodeMaterial({fog:false});
+ const local=waveField(positionLocal.x,positionLocal.y.negate(),true);
+ const localRadius=shoreRadius(positionLocal.x,positionLocal.y.negate());
+ m.positionNode=positionLocal.add(vec3(0,0,local.height.mul(smoothstep(1.005,1.18,localRadius))));
+ const p=positionWorld,radius=shoreRadius(p.x,p.z),waves=waveField(p.x,p.z);
+ const shoal=smoothstep(1.005,1.16,radius);
+ const n=vec3(waves.dx.mul(shoal).negate(),1,waves.dz.mul(shoal).negate()).normalize();
+ const v=waterView.normalize(),l=sunDirection.normalize();
+ const nv=n.dot(v).max(0);
+ const fresnel=float(WATER_F0).add(float(1-WATER_F0).mul(float(1).sub(nv).pow(5)));
+ const reflected=n.mul(n.dot(v).mul(2)).sub(v);
+ const skyReflection=mix(skyColor.mul(.7),skyColor.mul(1.3),smoothstep(-.05,.85,reflected.y));
+ const depth=smoothstep(1.02,1.65,radius);
+ const body=mix(waterNear,waterFar,depth);
+ const base=mix(body,skyReflection,fresnel).mul(n.y.mul(.06).add(.94));
+ // Derivative-based specular AA accounts for unresolved wave slopes.
+ const variance=fwidth(n).length().mul(.12);
+ const alpha=float(.085).add(variance).add(float(1).sub(shoal).mul(.16)).min(.35);
+ const spec=waterSpecular(n,v,l,alpha);
+ const radiance=mix(color('#fff0cd').mul(.65),color('#d9e6f1').mul(.3),moonStrength);
+ const warm=mix(radiance,color('#ffdfac').mul(.65),sunsetStrength);
+ // Only shoaling positive crests leave foam, no phase measured around the island.
+ const crest=smoothstep(.04,.19,waves.height);
+ const foam=crest.mul(float(1).sub(smoothstep(1.025,1.09,radius))).mul(smoothstep(1,1.025,radius));
+ const water=mix(base.add(warm.mul(spec)),foamColor,foam.mul(.45));
+ const clipWash=float(1).sub(smoothstep(0,20,positionView.z.negate()));
+ const haze=smoothstep(2.5,6,radius).max(clipWash);
+ m.colorNode=mix(water,skyColor,haze);
+ return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }
 
