@@ -11,8 +11,9 @@ export class OceanCascade {
  readonly spectrum:OceanSpectrum;
  readonly displacement:THREE.DataTexture[];readonly normals:THREE.DataTexture[];
  constructor(readonly length:number,rms:number,seed:number,wind:number){
-  this.spectrum=new OceanSpectrum(64,length,rms,seed,wind);
-  this.displacement=[0,1].map(()=>dataTexture(new Uint16Array(64*64*4),64,true));this.normals=[0,1].map(()=>dataTexture(new Uint16Array(64*64*4),64,true));
+  const size=length>100?128:64;
+  this.spectrum=new OceanSpectrum(size,length,rms,seed,wind);
+  this.displacement=[0,1].map(()=>dataTexture(new Uint16Array(size*size*4),size,true));this.normals=[0,1].map(()=>dataTexture(new Uint16Array(size*size*4),size,true));
   this.fill(0,0);this.fill(1,1/15);
  }
  fill(slot:number,time:number){this.spectrum.update(time);encoded(this.spectrum.displacement,this.displacement[slot].image.data as Uint16Array);encoded(this.spectrum.normals,this.normals[slot].image.data as Uint16Array);this.displacement[slot].needsUpdate=true;this.normals[slot].needsUpdate=true;}

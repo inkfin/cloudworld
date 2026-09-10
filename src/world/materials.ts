@@ -104,16 +104,19 @@ export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
  // FFT normals break it into glints; no world-space or screen-space light strip.
  const eveningGlow=reflected.normalize().dot(l).max(0).pow(6).mul(sunsetStrength);
  const sky=mix(mix(skyColor.mul(.55),skyColor,smoothstep(.05,.8,reflected.y)),color('#ffc394').mul(1.4),eveningGlow.mul(.8));
- const body=mix(shallow.add(subsurface),sky,fresnel);
- const alpha=float(.14).add(fwidth(n).length().mul(.18)).min(.35);
+ const transmitted=shallow.add(subsurface).mul(float(1).sub(fresnel));
+ const alpha=float(.21).add(fwidth(n).length().mul(.22)).min(.4);
  const spec=waterSpecular(n,v,l,alpha);
  const radiance=mix(color('#fff1d6').mul(.5),color('#c9ddef').mul(.25),moonStrength);
  const light=mix(radiance,color('#ffbf79').mul(.9),sunsetStrength);
  const breakup=foamGrain(q,ocean);
  const edge=float(1).sub(smoothstep(.025,.10,depth)).mul(smoothstep(0,.035,depth)).mul(coast);
  const offshoreBreakup=oceanNoise(q.mul(2.4).add(ocean.clock.mul(.035))).mul(.45).add(.55);
- const foam=whitecaps.mul(shoal).mul(.55).mul(offshoreBreakup).add(edge.mul(1.25).max(bedSample.g.mul(coast).mul(1.15)).mul(breakup)).min(.95);
- const lit=body.add(light.mul(spec));
+ const foam=smoothstep(.10,.65,whitecaps).mul(shoal).mul(.92).mul(offshoreBreakup).add(edge.mul(1.25).max(bedSample.g.mul(coast).mul(1.15)).mul(breakup)).min(.95);
+ // A hue-preserving shoulder rolls off grazing-angle HDR glints continuously.
+ const reflection=sky.mul(fresnel).add(light.mul(spec));
+ const brightest=reflection.x.max(reflection.y).max(reflection.z);
+ const lit=transmitted.add(reflection.div(float(1).add(brightest.div(.65))));
  const water=mix(lit,foamColor,foam);
  const nearClip=float(1).sub(smoothstep(0,20,positionView.z.negate()));
  const haze=smoothstep(6,11,radius).max(nearClip);

@@ -29,7 +29,7 @@ export class OceanSpectrum {
    if(!k||x===size/2||y===size/2)continue;
    const alignment=(kx*Math.cos(windAngle)+kz*Math.sin(windAngle))/k;
    const windLength=length>100?4.8:1.1;
-   const spectrum=Math.exp(-1/(k*windLength)**2)/(k**4)*(.12+.88*alignment**4)*Math.exp(-((k*(length>100?.9:.45))**2));
+   const spectrum=Math.exp(-1/(k*windLength)**2)/(k**4)*(.06+.94*alignment**6)*Math.exp(-((k*(length>100?.9:.45))**2));
    const amplitude=Math.sqrt(spectrum*.5),g=Math.sqrt(-2*Math.log(random())),angle=random()*Math.PI*2;
    this.h0r[i]=g*Math.cos(angle)*amplitude;this.h0i[i]=g*Math.sin(angle)*amplitude;this.omega[i]=Math.sqrt(9.81*k);
   }
@@ -50,15 +50,15 @@ export class OceanSpectrum {
  }
  update(t:number){
   this.evolve(t);const dt=Math.max(0,Math.min(.25,t-this.lastTime));this.lastTime=t;
-  const n=this.size,step=this.length/n,[h,,dx,,dz]=this.fields,chop=1.05;
+  const n=this.size,step=this.length/n,[h,,dx,,dz]=this.fields,chop=1.8;
   this.previousFoam.set(this.foam);
   for(let y=0;y<n;y++)for(let x=0;x<n;x++){
    const i=y*n+x,l=y*n+(x+n-1)%n,r=y*n+(x+1)%n,d=((y+n-1)%n)*n+x,u=((y+1)%n)*n+x;
    const hx=(h[r]-h[l])/(2*step),hz=(h[u]-h[d])/(2*step),xx=1+chop*(dx[r]-dx[l])/(2*step),zz=1+chop*(dz[u]-dz[d])/(2*step),xz=chop*(dx[u]-dx[d])/(2*step),zx=chop*(dz[r]-dz[l])/(2*step);
    const jac=xx*zz-xz*zx,nx=hz*zx-zz*hx,ny=jac,nz=xz*hx-hz*xx,len=Math.hypot(nx,ny,nz)||1;
-   const birth=Math.max(0,(.78-jac)*3.2)*Math.max(0,Math.min(1,h[i]/this.rms));
+   const birth=Math.max(0,(.58-jac)*5)*Math.max(0,Math.min(1,h[i]/this.rms-.65));
    const advected=this.previousFoam[i]*(1-dt*.2)+this.previousFoam[l]*dt*.2;
-   this.foam[i]=Math.min(1,Math.max(birth,advected*Math.exp(-dt*.55)));
+   this.foam[i]=Math.min(1,Math.max(birth,advected*Math.exp(-dt*.9)));
    const k=i*4;this.displacement[k]=dx[i]*chop;this.displacement[k+1]=h[i];this.displacement[k+2]=dz[i]*chop;this.displacement[k+3]=this.foam[i];
    this.normals[k]=nx/len;this.normals[k+1]=ny/len;this.normals[k+2]=nz/len;this.normals[k+3]=Math.max(0,h[i]/(this.rms*3));
   }

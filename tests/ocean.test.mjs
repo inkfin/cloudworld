@@ -11,10 +11,10 @@ test('FFT ocean remains real, bounded and tidal; surf wets the actual beach',asy
   const {FFT,OceanSpectrum,OceanSystem,tideAt,TIDE_PERIOD,runupAt}=await import(pathToFileURL(resolve(dir,'ocean.mjs')));
   const re=Float64Array.from({length:64},(_,i)=>Math.sin(i*.32)),im=new Float64Array(64),original=re.slice(),fft=new FFT(8);fft.transform(re,im,false);fft.transform(re,im,true);
   assert.ok(re.every((v,i)=>Math.abs(v-original[i])<1e-12));
-  const spectrum=new OceanSpectrum(64,173,.43,981,.55);
-  const rms=Math.sqrt(spectrum.fields[0].reduce((s,v)=>s+v*v,0)/4096);assert.ok(Math.abs(rms-.43)<.001);
+  const spectrum=new OceanSpectrum(128,173,.43,981,.55);
+  const rms=Math.sqrt(spectrum.fields[0].reduce((s,v)=>s+v*v,0)/spectrum.foam.length);assert.ok(Math.abs(rms-.43)<.001);
   const first=spectrum.displacement.slice();
-  for(const t of [1,10,50,140]){spectrum.update(t);assert.ok(spectrum.fields[1].every(v=>Math.abs(v)<1e-9),'conjugate symmetry must produce a real sea');assert.ok(spectrum.displacement.every(Number.isFinite));assert.ok(spectrum.foam.every(v=>v>=0&&v<=1));}
+  for(const t of [1,10,50,140]){spectrum.update(t);assert.ok(spectrum.fields[1].every(v=>Math.abs(v)<1e-9),'conjugate symmetry must produce a real sea');assert.ok(spectrum.displacement.every(Number.isFinite));assert.ok(spectrum.foam.every(v=>v>=0&&v<=1));assert.ok(spectrum.normals.every((v,i)=>Number.isFinite(v)&&(i%4!==1||v>0)),'choppy crests must not fold over');assert.ok(spectrum.foam.filter(v=>v>.3).length/spectrum.foam.length<.12,'whitecaps remain sparse rather than covering the sea');}
   assert.ok(first.some((v,i)=>Math.abs(v-spectrum.displacement[i])>.1),'waves evolve rather than slide a static texture');
   assert.ok(spectrum.foam.some(v=>v>.02),'compressed positive crests must generate whitecaps');
   const [heights,,dx]=spectrum.fields,n=spectrum.size,step=spectrum.length/n;
