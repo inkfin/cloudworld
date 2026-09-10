@@ -139,3 +139,10 @@ test('ocean depth is resolved before fading canopies and roof',async()=>{
  assert.equal(world.ocean.mesh.material.depthTest,true);
  assert.equal(world.ocean.mesh.material.depthWrite,true,'water must occlude submerged transparent shadows');
 });
+
+test('campfire light follows the beach slope around the whole fire',async()=>{
+ const {world,scene,sim}=await setup();scene.updateMatrixWorld(true);
+ const glow=world.fireGlow,p=glow.geometry.getAttribute('position');let below=0;
+ for(let i=0;i<p.count;i++){const v=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(glow.matrixWorld);if(v.y<sim.height(v.x,v.z)+.01)below++;}
+ assert.equal(below,0,'no part of the light may sink under the uphill sand');
+});

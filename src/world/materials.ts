@@ -3,7 +3,7 @@ const WATER_F0=((1.333-1)/(1.333+1))**2;
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
 import type { ShaderNodeObject } from 'three/tsl';
-import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, attribute, texture, fwidth, vec2 } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, attribute, texture, fwidth, vec2, uv, materialOpacity } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#258a9e'));
@@ -122,3 +122,10 @@ export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
  return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }
+
+export function fireGlowMaterial(){
+ const m=new THREE.MeshBasicNodeMaterial({color:'#eeae60',transparent:true,opacity:.1,depthWrite:false});
+ const radius=uv().sub(.5).length().mul(2);
+ m.opacityNode=float(1).sub(smoothstep(.05,1,radius)).pow(1.5).mul(materialOpacity);
+ return m;
+}

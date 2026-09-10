@@ -151,7 +151,7 @@ async function start(){
     skyBirdRange+=((environment.period==='day'?32:environment.period==='sunset'?52:85)-skyBirdRange)*(1-Math.exp(-dt*.1));
     world.skyBirds.forEach((bird,i)=>{const t=elapsed*.075+i*1.3;bird.position.set(Math.sin(t)*skyBirdRange,9+i*.55,Math.cos(t)*skyBirdRange*.78-3);bird.rotation.y=t+Math.PI/2;bird.rotation.z=Math.sin(t)*.1;});
     world.flames.forEach((flame,i)=>{flame.scale.set(1+Math.sin(elapsed*7+i)*.12,1+Math.sin(elapsed*9+i*2)*.2,1);});
-    (world.fireGlow.material as THREE.MeshBasicMaterial).opacity=(environment.period==='night'?.24:.08)*(1+Math.sin(elapsed*5)*.08);
+    world.fireGlow.material.opacity=(environment.period==='night'?.38:.08)*(1+Math.sin(elapsed*5)*.08);
     world.longShadows.forEach(({mesh})=>{(mesh.material as THREE.MeshBasicMaterial).opacity=sunsetStrength.value*.19;});
     if(!reduceMotion)world.treeTops.forEach((tree,i)=>tree.rotation.z=Math.sin(elapsed*.6+i)*.012*environment.wind);
     if(exploring){

@@ -5,7 +5,7 @@ import { TRAILS, CAMP, MEADOW, pathDistance } from './trails';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as THREE from 'three/webgpu';
 import type { Simulation } from '../simulation';
-import { ink, beachMaterial } from './materials';
+import { ink, beachMaterial, fireGlowMaterial } from './materials';
 import { OceanSystem } from './ocean';
 import { CAVE, type Obstacle } from './spatial';
 export type { Obstacle } from './spatial';
@@ -138,7 +138,11 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   for(const a of [-.65,.65]){const log=limb(fire,'#665444',[-.4,.15,a*.3],[.4,.15,-a*.3],.095);log.rotation.y=a;}
   const flames:THREE.Mesh[]=[];
   for(let i=0;i<3;i++){const flame=new THREE.Mesh(new THREE.ConeGeometry(.18-i*.035,.65-i*.12,5),new THREE.MeshBasicMaterial({color:['#e88843','#f9bd66','#ffe5a2'][i]}));flame.position.set((i-1)*.13,.43,i*.04);fire.add(flame);flames.push(flame);}
-  const fireGlow=new THREE.Mesh(new THREE.CircleGeometry(2.1,32),new THREE.MeshBasicMaterial({color:'#eeae60',transparent:true,opacity:.1,depthWrite:false}));fireGlow.rotation.x=-Math.PI/2;fireGlow.position.y=.025;fire.add(fireGlow);
+  // A subdivided ground-following disk cannot disappear into the sloping beach.
+  const glowGeometry=new THREE.RingGeometry(0,2.8,64,20),glowVertices=glowGeometry.getAttribute('position');
+  for(let i=0;i<glowVertices.count;i++){const x=glowVertices.getX(i),z=-glowVertices.getY(i);glowVertices.setXYZ(i,x,sim.height(fire.position.x+x,fire.position.z+z)-fire.position.y+.035,z);}
+  glowGeometry.computeVertexNormals();
+  const fireGlow=new THREE.Mesh(glowGeometry,fireGlowMaterial());fire.add(fireGlow);
   obstacles.push({x:1.8,z:19,radius:.82});
   const signs=[{x:-1.8,z:13,label:'野花原 ← · 岩洞 →'}, {x:-8.9,z:2.5,label:'← 野花原 · 营地 ↓'}, {x:-12.9,z:-10.5,label:'望海坡 ↑ · 岩洞 →'}, {x:7,z:3,label:'回声岩洞 ↑ · 东岸 →'}];
   for(const point of signs){const g=new THREE.Group();g.position.set(point.x,sim.height(point.x,point.z),point.z);scenery.add(g);limb(g,'#806e52',[0,0,0],[0,1.25,0],.075);cube(g,'#c5ac7e',[0,1.12,0],[1.55,.34,.1]);
