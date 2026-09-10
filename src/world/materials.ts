@@ -35,7 +35,7 @@ export function ink(hex: string): THREE.MeshBasicNodeMaterial {
   return material;
 }
 export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
-  const m = new THREE.MeshBasicNodeMaterial({ transparent: false });
+  const m = new THREE.MeshBasicNodeMaterial({ transparent: false, fog: false });
   const p = positionWorld;
   const a = p.z.div(ISLAND_Z).atan2(p.x.div(ISLAND_X));
   const radius = p.x.div(ISLAND_X).pow(2).add(p.z.div(ISLAND_Z).pow(2)).sqrt().div(sin(a.mul(5)).mul(.045).add(a.mul(3).cos().mul(.025)).add(1));

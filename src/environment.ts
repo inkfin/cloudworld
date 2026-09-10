@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import {positionGeometry,vec4} from 'three/tsl';
 import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, duskCloudMaterial, celestialWash, moonStrength, skyAspect } from './world/materials';
 export type TimeOfDay = 'day'|'sunset'|'night';
 export const periods: Record<TimeOfDay,{label:string;sky:string;near:string;far:string;tint:string;foam:string;wind:number;icon:string}> = {
@@ -18,7 +19,11 @@ export class Environment {
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
     this.stars=new THREE.Points(geometry,this.starMaterial);scene.add(this.stars);
     this.clouds=new THREE.Mesh(new THREE.PlaneGeometry(150,26),duskCloudMaterial());this.clouds.position.set(-20,13,-40);this.clouds.rotation.y=.5;scene.add(this.clouds);
-    scene.backgroundNode=celestialWash(skyColor);
+    const skyMaterial=new THREE.MeshBasicNodeMaterial({depthTest:false,depthWrite:false,fog:false});
+    skyMaterial.vertexNode=vec4(positionGeometry.xy,1,1);
+    skyMaterial.colorNode=celestialWash(skyColor);
+    const backdrop=new THREE.Mesh(new THREE.PlaneGeometry(2,2),skyMaterial);
+    backdrop.name='Sky backdrop';backdrop.frustumCulled=false;backdrop.renderOrder=-10000;scene.add(backdrop);
   }
   set(period:TimeOfDay){this.period=period;this.automatic=false;}
   update(dt:number){
