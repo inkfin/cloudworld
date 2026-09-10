@@ -14,6 +14,7 @@ test('moonlight follows viewing direction and time without a celestial solid',as
   const camera=new THREE.OrthographicCamera(-30,30,20,-20,.1,250);
   const env=new Environment(scene,camera);assert.equal(scene.getObjectByName('Sky backdrop'),undefined,'no fixed screen moon');
   assert.equal(scene.children.filter(o=>o.geometry?.type==='SphereGeometry').length,0,'no celestial solid can intersect trees or write depth');
+  assert.equal(scene.children.filter(o=>o.isMesh).length,0,'sunset must not add a floating cloud or reflection plane');
   env.set('night');for(let i=0;i<300;i++)env.update(1/30);assert.ok(moonStrength.value>.99);
   camera.position.set(30,40,-20);camera.lookAt(0,0,0);camera.updateMatrixWorld();env.update(1/30);
   const view=waterView.value.clone();

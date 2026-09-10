@@ -3,7 +3,7 @@ const WATER_F0=((1.333-1)/(1.333+1))**2;
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
 import type { ShaderNodeObject } from 'three/tsl';
-import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, attribute, texture, fwidth, uv, vec2 } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, attribute, texture, fwidth, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#258a9e'));
@@ -100,12 +100,15 @@ export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
  const shallow=mix(waterFar,waterNear,extinction);
  const subsurface=waterNear.mul(peak).mul(shoal).mul(.17).mul(float(1).sub(moonStrength.mul(.65)));
  const reflected=n.mul(n.dot(v).mul(2)).sub(v);
- const sky=mix(skyColor.mul(.55),skyColor,smoothstep(.05,.8,reflected.y));
+ // Sample a broad warm region of the sky along the reflected ray.
+ // FFT normals break it into glints; no world-space or screen-space light strip.
+ const eveningGlow=reflected.normalize().dot(l).max(0).pow(6).mul(sunsetStrength);
+ const sky=mix(mix(skyColor.mul(.55),skyColor,smoothstep(.05,.8,reflected.y)),color('#ffc394').mul(1.4),eveningGlow.mul(.8));
  const body=mix(shallow.add(subsurface),sky,fresnel);
  const alpha=float(.14).add(fwidth(n).length().mul(.18)).min(.35);
  const spec=waterSpecular(n,v,l,alpha);
  const radiance=mix(color('#fff1d6').mul(.5),color('#c9ddef').mul(.25),moonStrength);
- const light=mix(radiance,color('#ffdb9a').mul(.6),sunsetStrength);
+ const light=mix(radiance,color('#ffbf79').mul(.9),sunsetStrength);
  const breakup=foamGrain(q,ocean);
  const edge=float(1).sub(smoothstep(.025,.10,depth)).mul(smoothstep(0,.035,depth)).mul(coast);
  const offshoreBreakup=oceanNoise(q.mul(2.4).add(ocean.clock.mul(.035))).mul(.45).add(.55);
@@ -119,15 +122,3 @@ export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
  return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }
-
-export function duskCloudMaterial(): THREE.MeshBasicNodeMaterial {
-  const m=new THREE.MeshBasicNodeMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,fog:false});
-  const p=uv(),wave=sin(p.x.mul(17)).mul(.025).add(sin(p.x.mul(39)).mul(.009));
-  const stripe=p.y.add(wave);
-  const bank=smoothstep(.08,.28,stripe).mul(float(1).sub(smoothstep(.32,.65,stripe)));
-  const wisps=sin(stripe.mul(65).add(sin(p.x.mul(11)))).mul(.2).add(.8);
-  const ends=smoothstep(0,.2,p.x).mul(float(1).sub(smoothstep(.78,1,p.x)));
-  m.colorNode=mix(color('#e9a381'),color('#b77791'),smoothstep(.12,.7,p.y));
-  m.opacityNode=bank.mul(wisps).mul(ends).mul(sunsetStrength).mul(.7);
-  return m;
-}

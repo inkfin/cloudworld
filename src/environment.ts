@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, duskCloudMaterial, moonStrength, waterView } from './world/materials';
+import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, moonStrength, waterView } from './world/materials';
 export type TimeOfDay = 'day'|'sunset'|'night';
 export const periods: Record<TimeOfDay,{label:string;sky:string;near:string;far:string;tint:string;foam:string;wind:number;icon:string}> = {
   day:{label:'白昼',sky:'#eeeade',near:'#258a9e',far:'#0a304f',tint:'#ffffff',foam:'#f7f4dc',wind:.55,icon:'☼'},
@@ -9,7 +9,6 @@ export const periods: Record<TimeOfDay,{label:string;sky:string;near:string;far:
 export class Environment {
   period:TimeOfDay='day';automatic=false;clock=0;wind=.55;
   private stars:THREE.Points;
-  private clouds:THREE.Mesh;
   private viewDirection=new THREE.Vector3();
   private starMaterial=new THREE.PointsMaterial({color:'#ede9c9',size:.10,transparent:true,opacity:0,depthWrite:false});
   constructor(private scene:THREE.Scene,private camera:THREE.Camera){
@@ -17,7 +16,6 @@ export class Environment {
     const positions=[];for(let i=0;i<160;i++)positions.push((rand()-.5)*140,15+rand()*35,(rand()-.7)*100);
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
     this.stars=new THREE.Points(geometry,this.starMaterial);scene.add(this.stars);
-    this.clouds=new THREE.Mesh(new THREE.PlaneGeometry(150,26),duskCloudMaterial());this.clouds.position.set(-20,13,-40);this.clouds.rotation.y=.5;scene.add(this.clouds);
 
   }
   set(period:TimeOfDay){this.period=period;this.automatic=false;}
