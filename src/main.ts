@@ -52,6 +52,8 @@ async function start(){
   const controls=new OrbitControls(camera,renderer.domElement);
   controls.enableDamping=true;controls.dampingFactor=.07;controls.enablePan=false;controls.minPolarAngle=.35;controls.maxPolarAngle=1.13;controls.minZoom=.3;controls.maxZoom=3;controls.target.set(0,0,0);
   const world=buildIsland(scene,sim),player=child();scene.add(player.group);
+  const {loadCaveModel}=await import('./world/cave-model');
+  const caveAsset=await loadCaveModel(world.cave,world.caveRoof,sim);
   const environment=new Environment(scene,camera),animals=new CreatureSystem(world.creatures,world.obstacles,sim);
   const visibility=new VisibilitySystem(camera,world.canopies,world.caveRoof);
   const playerShadow=new THREE.Group();shadow(playerShadow,0,0,0,.33,.22);scene.add(playerShadow);
@@ -162,7 +164,7 @@ async function start(){
     sound.update(dt,{period:environment.period,cave:exploring?cave:0,wind:environment.wind,distance:exploring&&!dialog.open&&!mixDialog.open?distance:0,surface:surfaceAt(px,pz,sim),running,paused:document.hidden});
     renderer.render(scene,camera);
     frames++;statusTime+=dt;if(statusTime>1){fps=Math.round(frames/statusTime);frames=0;statusTime=0;}
-    (window as any).__island={ready:true,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state,reactions:c.reactions,period:c.period,activity:c.activity})),trees:world.treeTops.length,drawCalls:renderer.info.render.drawCalls};
+    (window as any).__island={ready:true,caveAsset,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state,reactions:c.reactions,period:c.period,activity:c.activity})),trees:world.treeTops.length,drawCalls:renderer.info.render.drawCalls};
   });
 }
 start().catch(error=>{console.error(error);$('enter-label').textContent='小岛暂未抵达';$('load-status').textContent=error instanceof Error?error.message:String(error);$('load-status').style.maxWidth='310px';$('load-status').style.lineHeight='1.8';$('engine-status').textContent='WEBGPU UNAVAILABLE';});

@@ -69,14 +69,9 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   const caveY=sim.height(CAVE.x,CAVE.z);
   const cave=new THREE.Group();cave.position.set(CAVE.x,caveY,CAVE.z);scene.add(cave);
   for(const side of [-1,1]){
-    blob(cave,side<0?'#788878':'#8e9984',[side*4.3,1.9,0],[.9,2.35,5.25],true);
     obstacles.push({x:CAVE.x+side*4.3,z:CAVE.z,radius:.5,halfX:.7,halfZ:4.9});
   }
   const caveRoof=new THREE.Group();cave.add(caveRoof);
-  blob(caveRoof,'#8d9a87',[0,4,0],[5.2,.85,5.6],true);
-  blob(caveRoof,'#a2ae90',[-1,4.6,-1],[2,.3,2],true);
-  blob(caveRoof,'#688766',[2,4.55,.5],[1.2,.2,1.5]);
-  blob(cave,'#4d665d',[0,1.9,-5.2],[5,2.4,.8],true);
   obstacles.push({x:CAVE.x,z:CAVE.backZ-.6,radius:.5,halfX:5,halfZ:.45});
   // 石地沿真实地形贴合，避免脚悬空；木平台使用同一个地表查询。
   const stoneGeometry=new THREE.PlaneGeometry(7.3,9.8,32,40);
@@ -93,8 +88,7 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   const bedY=sim.height(CAVE.bed.x,CAVE.bed.z);
   blob(scene,'#a29b6e',[CAVE.bed.x,bedY+.04,CAVE.bed.z],[.85,.08,.65]);
   shadow(scenery,CAVE.x,sim.height(CAVE.x,CAVE.z),CAVE.z,3.5,4.3);
-  // 洞顶停鸟的位置对应上方的平坦苔石。
-  blob(caveRoof,'#a5ad92',[1.1,4.5,-.6],[.75,.12,.65]);
+  // 岩壳和鸟的落脚石由 Blender GLB 提供；地面细节仍贴合 WASM 地形。
   for(let i=0;i<8;i++){
     const x=CAVE.x+(i%2?2.65:-2.65),z=CAVE.z-3+(i>>1)*1.6,y=sim.height(x,z);
     blob(scenery,i%2?'#82958a':'#637a75',[x,y+.25,z],[.32,.48,.35],true);

@@ -7,11 +7,14 @@ const fs=await import('node:fs/promises');
 const assert=(condition,message)=>{if(!condition)throw Error(message);};
 await page.cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:960,deviceScaleFactor:1,mobile:false});
 await page.cdp('Emulation.setTouchEmulationEnabled',{enabled:false});
+// Keep the test page active when the host desktop switches to another application.
+await page.cdp('Emulation.setFocusEmulationEnabled',{enabled:true});
 await page.cdp('Page.addScriptToEvaluateOnNewDocument',{source:"window.__qaErrors=[];window.addEventListener('error',e=>window.__qaErrors.push(e.message));window.addEventListener('unhandledrejection',e=>window.__qaErrors.push(String(e.reason)));"});
 await page.goto('http://localhost:5173/');
 await page.waitForFunction(()=>window.__island?.ready,undefined,{timeout:20000});
 console.log(await page.snapshot());
 assert(await page.evaluate(()=>window.__island.backend==='webgpu'),'real WebGPU required');
+assert(await page.evaluate(()=>window.__island.caveAsset?.source==='blender-glb'),'Blender cave must load');
 const source=await fs.readFile(`${root}/tests/audio.qa.js`,'utf8');
 console.log({acoustics:await page.evaluate(`(async()=>{${source};return await checkAudio();})()`)});
 const quality=await fs.readFile(`${root}/tests/audio-quality.qa.js`,'utf8');
