@@ -1,7 +1,7 @@
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
 import type { ShaderNodeObject } from 'three/tsl';
-import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, uv, vec2 } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, cameraPosition, uv, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#a4c9bb'));
@@ -54,7 +54,7 @@ export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
   const grain=sin(p.z.mul(2.9).add(sin(p.x.mul(.72))).sub(time.mul(.5)));
   const ripple=swell.mul(.0025).add(grain.mul(.0015)).mul(float(1).sub(far));
   const n=vec3(sin(p.x.mul(1.2).add(time.mul(.45))).mul(.09),1,sin(p.z.mul(3.1).sub(time.mul(.65))).mul(.16)).normalize();
-  const halfVector=waterView.add(sunDirection.normalize()).normalize();
+  const halfVector=cameraPosition.sub(p).normalize().add(sunDirection.normalize()).normalize();
   const glint=n.dot(halfVector).max(0).pow(80).mul(.35);
   const sunsetWater=mix(wash,color('#c89b99'),far.mul(.3).mul(sunsetStrength));
   // A painterly reflection footprint on the sea, not a screen-space lunar disc.
@@ -75,7 +75,7 @@ export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
   const lunar=color('#cbdcda').mul(silver.add(glow)).mul(moonStrength)
     .mul(smoothstep(1.015,1.12,radius));
   m.colorNode=mix(sunsetWater,foamColor,foam.mul(.32)).add(ripple)
-    .add(color('#ffe0a4').mul(glint).mul(broken).mul(sunsetStrength).mul(smoothstep(1,1.13,radius)))
+    .add(color('#ffe0a4').mul(glint).mul(broken).mul(sunsetStrength).mul(smoothstep(1,1.13,radius)).mul(float(1).sub(clipWash)))
     .add(lunar.mul(float(1).sub(clipWash)));
   return m;
 }
