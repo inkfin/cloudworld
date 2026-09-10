@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 test('Blender cave fits gameplay clearance and retains detachable roof and perch anchors',async()=>{
  const bytes=await readFile('public/models/cave.glb');assert.ok(bytes.length<150000);
  const gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+ await mkdir(resolve('.playwright'),{recursive:true});
  const dir=await mkdtemp(resolve('.playwright/cave-test-'));
  try{
   await build({stdin:{contents:`export {installCaveModel} from './src/world/cave-model';export {VisibilitySystem} from './src/world/visibility';export {CAVE,floorHeight} from './src/world/spatial';`,resolveDir:process.cwd(),loader:'ts'},outfile:resolve(dir,'cave.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'});
