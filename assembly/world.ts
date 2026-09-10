@@ -10,7 +10,7 @@ export function radius(x: f64, z: f64): f64 {
 }
 export function height(x: f64, z: f64): f64 {
   const r = radius(x, z);
-  const base = 0.20 + Math.max(0.0, 1.0 - r) * 1.0;
+  const base = 0.20 + Math.max(0.0, 1.0 - r) * 1.0 - Math.max(0.0, r - 1.0) * 10.0;
   const hill = 2.2 * Math.exp(-((x + 8.0) * (x + 8.0) + (z + 9.0) * (z + 9.0)) / 150.0);
   return base + hill * Math.max(0.0, Math.min(1.0, (1.0 - r) * 4.0));
 }

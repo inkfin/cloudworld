@@ -1,12 +1,13 @@
-import { WAVES, WATER_F0 } from './waves';
+import type { OceanSystem } from './ocean';
+const WATER_F0=((1.333-1)/(1.333+1))**2;
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
 import type { ShaderNodeObject } from 'three/tsl';
-import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, positionLocal, fwidth, uv, vec2 } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, positionView, sin, time, vec3, smoothstep, uniform, attribute, texture, fwidth, uv, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
-export const waterNear=uniform(new THREE.Color('#a4c9bb'));
-export const waterFar=uniform(new THREE.Color('#d4dfd1'));
+export const waterNear=uniform(new THREE.Color('#258a9e'));
+export const waterFar=uniform(new THREE.Color('#0a304f'));
 export const foamColor=uniform(new THREE.Color('#f7f4dc'));
 export const sunDirection=uniform(new THREE.Vector3(-.45,.85,.35));
 export const sunsetStrength=uniform(0);
@@ -28,21 +29,8 @@ export function ink(hex: string): THREE.MeshBasicNodeMaterial {
   return material;
 }
 type N=ShaderNodeObject<THREE.Node>;
-function waveField(x:N,z:N,vertex=false){
- let height: N=float(0),dx:N=float(0),dz:N=float(0);
- for(const w of WAVES){
-  if(vertex&&!w.geometry)continue;
-  const phase=x.mul(w.x).add(z.mul(w.z)).mul(w.k).sub(time.mul(w.omega)).add(w.phase);
-  // Sub-pixel waves become roughness rather than flickering bright lines.
-  const resolved=vertex?float(1):float(1).sub(smoothstep(.8,2.8,fwidth(phase)));
-  height=height.add(sin(phase).mul(w.amplitude).mul(resolved));
-  const slope=phase.cos().mul(w.amplitude*w.k).mul(resolved);
-  dx=dx.add(slope.mul(w.x));dz=dz.add(slope.mul(w.z));
- }
- return {height,dx,dz};
-}
 function shoreRadius(x:N,z:N){
- const a=z.div(ISLAND_Z).atan2(x.div(ISLAND_X));
+ const a=z.div(ISLAND_Z).atan(x.div(ISLAND_X));
  return x.div(ISLAND_X).pow(2).add(z.div(ISLAND_Z).pow(2)).sqrt()
   .div(sin(a.mul(5)).mul(.045).add(a.mul(3).cos().mul(.025)).add(1));
 }
@@ -56,35 +44,56 @@ function waterSpecular(n:N,v:N,l:N,alpha:N){
  const fresnel=float(WATER_F0).add(float(1-WATER_F0).mul(float(1).sub(vh).pow(5)));
  return distribution.mul(visibility).mul(fresnel).mul(nl);
 }
-export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
- const m=new THREE.MeshBasicNodeMaterial({fog:false});
- const local=waveField(positionLocal.x,positionLocal.y.negate(),true);
- const localRadius=shoreRadius(positionLocal.x,positionLocal.y.negate());
- m.positionNode=positionLocal.add(vec3(0,0,local.height.mul(smoothstep(1.005,1.18,localRadius))));
- const p=positionWorld,radius=shoreRadius(p.x,p.z),waves=waveField(p.x,p.z);
- const shoal=smoothstep(1.005,1.16,radius);
- const n=vec3(waves.dx.mul(shoal).negate(),1,waves.dz.mul(shoal).negate()).normalize();
- const v=waterView.normalize(),l=sunDirection.normalize();
- const nv=n.dot(v).max(0);
+function oceanNoise(p:N){
+ const cell=p.floor(),f=p.fract(),u=f.mul(f).mul(float(3).sub(f.mul(2)));
+ const hash=(q:N)=>sin(q.dot(vec2(127.1,311.7))).mul(43758.5453).fract();
+ return mix(mix(hash(cell),hash(cell.add(vec2(1,0))),u.x),mix(hash(cell.add(vec2(0,1))),hash(cell.add(1)),u.x),u.y);
+}
+export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
+ const m=new THREE.MeshBasicNodeMaterial({fog:false,transparent:true,depthWrite:false,side:THREE.DoubleSide,alphaTest:.002});
+ const attr=attribute('position','vec3'),q=vec2(attr.x,attr.y.negate());
+ const radius=shoreRadius(q.x,q.y);
+ const bedSample=texture(ocean.bed,q.div(128).add(.5));
+ const offshore=radius.sub(1).max(0).mul(10).negate().add(.2);
+ const bed=mix(bedSample.r,offshore,smoothstep(58,64,q.x.abs().max(q.y.abs())));
+ const calmDepth=ocean.seaLevel.sub(bed).max(0),shoal=calmDepth.div(calmDepth.add(1.2));
+ const coast=smoothstep(.83,.94,radius).mul(float(1).sub(smoothstep(1.12,1.4,radius)));
+ const pulse=sin(ocean.clock.mul(.73).add(radius.mul(24)).add(q.x.mul(.11)).add(q.y.mul(.08)))
+  .add(sin(ocean.clock.mul(1.13).add(radius.mul(37)).sub(q.x.mul(.09)).add(q.y.mul(.13))).mul(.4)).max(0).mul(.19).mul(coast);
+ let displacement:N=vec3(0),normalSlope:N=vec2(0),whitecaps:N=float(0),peak:N=float(0);
+ for(const c of ocean.cascades){
+  const tc=q.div(c.length).add(.5);
+  const d=mix(texture(c.displacement[0],tc),texture(c.displacement[1],tc),ocean.blend);
+  const n=mix(texture(c.normals[0],tc),texture(c.normals[1],tc),ocean.blend);
+  displacement=displacement.add(d.xyz);normalSlope=normalSlope.add(n.xz.div(n.y.max(.2)));
+  whitecaps=whitecaps.max(d.w);peak=peak.max(n.w);
+ }
+ const level=ocean.seaLevel.add(displacement.y.mul(shoal)).add(pulse);
+ m.positionNode=vec3(attr.x.add(displacement.x.mul(shoal)),attr.y.sub(displacement.z.mul(shoal)),level);
+ const depth=level.sub(bed).max(0);
+ const n=vec3(normalSlope.x.mul(shoal),1,normalSlope.y.mul(shoal)).normalize();
+ const v=waterView.normalize(),l=sunDirection.normalize(),nv=n.dot(v).max(0);
  const fresnel=float(WATER_F0).add(float(1-WATER_F0).mul(float(1).sub(nv).pow(5)));
+ // Beer-Lambert extinction: thin shoals transmit the rendered sand beneath them.
+ const extinction=vec3(.48,.18,.09).mul(depth).negate().exp();
+ const shallow=mix(waterFar,waterNear,extinction);
+ const subsurface=waterNear.mul(peak).mul(shoal).mul(.17).mul(float(1).sub(moonStrength.mul(.65)));
  const reflected=n.mul(n.dot(v).mul(2)).sub(v);
- const skyReflection=mix(skyColor.mul(.7),skyColor.mul(1.3),smoothstep(-.05,.85,reflected.y));
- const depth=smoothstep(1.02,1.65,radius);
- const body=mix(waterNear,waterFar,depth);
- const base=mix(body,skyReflection,fresnel).mul(n.y.mul(.06).add(.94));
- // Derivative-based specular AA accounts for unresolved wave slopes.
- const variance=fwidth(n).length().mul(.12);
- const alpha=float(.085).add(variance).add(float(1).sub(shoal).mul(.16)).min(.35);
+ const sky=mix(skyColor.mul(.55),skyColor,smoothstep(.05,.8,reflected.y));
+ const body=mix(shallow.add(subsurface),sky,fresnel);
+ const alpha=float(.14).add(fwidth(n).length().mul(.18)).min(.35);
  const spec=waterSpecular(n,v,l,alpha);
- const radiance=mix(color('#fff0cd').mul(.65),color('#d9e6f1').mul(.3),moonStrength);
- const warm=mix(radiance,color('#ffdfac').mul(.65),sunsetStrength);
- // Only shoaling positive crests leave foam, no phase measured around the island.
- const crest=smoothstep(.04,.19,waves.height);
- const foam=crest.mul(float(1).sub(smoothstep(1.025,1.09,radius))).mul(smoothstep(1,1.025,radius));
- const water=mix(base.add(warm.mul(spec)),foamColor,foam.mul(.45));
- const clipWash=float(1).sub(smoothstep(0,20,positionView.z.negate()));
- const haze=smoothstep(2.5,6,radius).max(clipWash);
- m.colorNode=mix(water,skyColor,haze);
+ const radiance=mix(color('#fff1d6').mul(.5),color('#c9ddef').mul(.25),moonStrength);
+ const light=mix(radiance,color('#ffdb9a').mul(.6),sunsetStrength);
+ const breakup=oceanNoise(q.mul(2.4).add(ocean.clock.mul(.035))).mul(.45).add(.55);
+ const edge=float(1).sub(smoothstep(.035,.18,depth)).mul(smoothstep(0,.035,depth)).mul(coast);
+ const foam=whitecaps.mul(shoal).mul(.55).add(edge.mul(.8)).max(bedSample.g.mul(coast)).mul(breakup).min(.95);
+ const lit=body.add(light.mul(spec));
+ const water=mix(lit,foamColor,foam);
+ const nearClip=float(1).sub(smoothstep(0,20,positionView.z.negate()));
+ const haze=smoothstep(6,11,radius).max(nearClip);
+ m.colorNode=mix(water,waterFar,haze);
+ m.opacityNode=mix(smoothstep(0,.035,depth).mul(float(1).sub(depth.mul(-2).exp()).max(foam)),1,haze);
  return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }

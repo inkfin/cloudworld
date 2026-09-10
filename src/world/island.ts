@@ -5,7 +5,9 @@ import { TRAILS, CAMP, MEADOW, pathDistance } from './trails';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as THREE from 'three/webgpu';
 import type { Simulation } from '../simulation';
-import { ink, oceanMaterial } from './materials';
+import { ink } from './materials';
+import { OceanSystem } from './ocean';
+import { positionWorld, smoothstep, mix, color, texture, vec3 } from 'three/tsl';
 import { CAVE, type Obstacle } from './spatial';
 export type { Obstacle } from './spatial';
 import { animal, blob, cube, limb, shadow, type Species } from './models';
@@ -15,12 +17,12 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   let seed=314159;
   const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)|0;return (seed>>>0)/4294967296;};
   const creatures: Creature[]=[]; const obstacles: Obstacle[]=[];
-  const ocean=new THREE.Mesh(new THREE.PlaneGeometry(500,500,160,160),oceanMaterial());ocean.rotation.x=-Math.PI/2;ocean.position.y=.02;scene.add(ocean);
+  const ocean=new OceanSystem(sim);scene.add(ocean.mesh);
   // 同一张连续网格，沙滩与内陆使用顶点色过渡，避免层叠地表和碰撞不一致。
   const positions:number[]=[],colors:number[]=[],indices:number[]=[];
   const segments=224,rings=100;
   for(let r=0;r<=rings;r++)for(let i=0;i<=segments;i++){
-    const a=i/segments*Math.PI*2;const fraction=r/rings;const shape=1+.045*Math.sin(a*5)+.025*Math.cos(a*3);
+    const a=i/segments*Math.PI*2;const fraction=r/rings*1.35;const shape=1+.045*Math.sin(a*5)+.025*Math.cos(a*3);
     const x=Math.cos(a)*ISLAND_X*fraction*shape,z=Math.sin(a)*ISLAND_Z*fraction*shape;
     positions.push(x,sim.height(x,z),z);
     const path=pathDistance(x,z);
@@ -32,11 +34,9 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   }
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
   const groundMaterial=ink('#ffffff').clone();groundMaterial.vertexColors=true;
+  const wet=texture(ocean.bed,positionWorld.xz.div(128).add(.5));
+  groundMaterial.colorNode=mix(vec3(groundMaterial.colorNode!).mul(mix(color('#ffffff'),color('#8f9b97'),wet.b)),color('#eef6f1'),wet.g.mul(.65));
   const ground=new THREE.Mesh(geo,groundMaterial);scene.add(ground);
-  // 沙岸外沿露出的薄层。
-  const edgePositions:number[]=[],edgeIndices:number[]=[];
-  for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,shape=1+.045*Math.sin(a*5)+.025*Math.cos(a*3),x=Math.cos(a)*ISLAND_X*shape,z=Math.sin(a)*ISLAND_Z*shape;edgePositions.push(x,.21,z,x*1.01,-.05,z*1.01);if(i<segments){const k=i*2;edgeIndices.push(k,k+1,k+2,k+1,k+3,k+2);}}
-  const edgeGeo=new THREE.BufferGeometry();edgeGeo.setAttribute('position',new THREE.Float32BufferAttribute(edgePositions,3));edgeGeo.setIndex(edgeIndices);edgeGeo.computeVertexNormals();scene.add(new THREE.Mesh(edgeGeo,ink('#cabd95')));
   const scenery=new THREE.Group();scene.add(scenery);
   const treeTops: THREE.Object3D[]=[];
   const longShadows: {mesh:THREE.Mesh;x:number;z:number;height:number}[]=[];
@@ -167,5 +167,5 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
   scenery.traverse(object=>{if(object instanceof THREE.Mesh){const material=object.material as THREE.Material;const geo=object.geometry.clone().applyMatrix4(object.matrixWorld);const list=batches.get(material)||[];list.push(geo);batches.set(material,list);}});
   for(const [material,geometries] of batches){const geometry=mergeGeometries(geometries,false);if(geometry)scene.add(new THREE.Mesh(geometry,material));geometries.forEach(g=>g.dispose());}
   scene.remove(scenery);
-  return {creatures,obstacles,treeTops,canopies,skyBirds,cave,caveRoof,longShadows,flames,fireGlow,signs};
+  return {ocean,creatures,obstacles,treeTops,canopies,skyBirds,cave,caveRoof,longShadows,flames,fireGlow,signs};
 }

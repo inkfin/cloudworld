@@ -9,7 +9,7 @@ export interface Simulation {
   speed(): number;
 }
 export async function loadSimulation(): Promise<Simulation> {
-  const response = await fetch(`${import.meta.env.BASE_URL}world.wasm`);
+  const response = await fetch(`${import.meta.env.BASE_URL}world.wasm`, {cache: 'no-cache'});
   if (!response.ok) throw new Error(`无法加载小岛引擎 (${response.status})`);
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), {
     env: { abort: () => { throw new Error('小岛引擎运行出错'); } },

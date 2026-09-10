@@ -36,6 +36,7 @@ $('sound-button').onclick=async()=>{
 };
 const messages:Record<Species,string>={rabbit:'兔子停下来嗅了嗅。它把这一小片阳光分给了你。',fox:'狐狸回过头，安静地陪你站了一会儿。',gull:'海鸥说，今天的风很适合什么也不做。',bird:'小鸟唱了两句，又把旋律留给了树叶。',butterfly:'蝴蝶绕过你的草帽，像一封没有署名的信。',crab:'小螃蟹横着走过，认真巡视它的海岸线。',isopod:'石缝里的海蟑螂探出触角，又悄悄藏好。'};
 async function start(){
+  document.body.classList.add('ocean-world');
   if(!navigator.gpu)throw new Error('这座岛需要 WebGPU。请使用支持 WebGPU 的浏览器，并通过 localhost 或 HTTPS 打开。');
   const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw new Error('没有可用的 WebGPU 设备。请检查浏览器的图形加速设置。');
   const sim=await loadSimulation();
@@ -111,13 +112,13 @@ async function start(){
   const forward=new THREE.Vector3(),right=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
   const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   // 开发验收入口不进入生产构建，跳转仍调用实际 WASM 与场景循环。
-  if(import.meta.env.DEV)(window as any).__islandTest={warp:(x:number,z:number)=>{sim.resolve(x,z);},time:(seconds:number)=>{elapsed=seconds;}};
+  if(import.meta.env.DEV)(window as any).__islandTest={warp:(x:number,z:number)=>{sim.resolve(x,z);},time:(seconds:number)=>{elapsed=seconds;},oceanTime:(seconds:number)=>world.ocean.setTime(seconds,elapsed)};
   await renderer.compileAsync(scene,camera);
   $('enter-label').textContent='走进小岛';enter.disabled=false;$('load-status').textContent='无需行李，带上好奇心就好。';$('engine-status').textContent='WEBGPU · WASM';
   renderer.setAnimationLoop(()=>{
     const now=performance.now(),dt=Math.min((now-previous)/1000,.05);previous=now;
     if(document.hidden)return;
-    elapsed+=dt;environment.update(dt);if(lastPeriod!==environment.period)updateTimeUI();
+    elapsed+=dt;environment.update(dt);world.ocean.update(elapsed,dt);if(lastPeriod!==environment.period)updateTimeUI();
     let ix=0,iz=0;
     if(exploring&&!dialog.open&&!mixDialog.open){ix=Number(keys.has('KeyD')||keys.has('ArrowRight'))-Number(keys.has('KeyA')||keys.has('ArrowLeft'));iz=Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown'));}
     const running=keys.has('ShiftLeft')||keys.has('ShiftRight'),oldX=sim.x(),oldZ=sim.z();
@@ -164,7 +165,7 @@ async function start(){
     sound.update(dt,{period:environment.period,cave:exploring?cave:0,wind:environment.wind,distance:exploring&&!dialog.open&&!mixDialog.open?distance:0,surface:surfaceAt(px,pz,sim),running,paused:document.hidden});
     renderer.render(scene,camera);
     frames++;statusTime+=dt;if(statusTime>1){fps=Math.round(frames/statusTime);frames=0;statusTime=0;}
-    (window as any).__island={ready:true,caveAsset,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state,reactions:c.reactions,period:c.period,activity:c.activity})),trees:world.treeTops.length,drawCalls:renderer.info.render.drawCalls};
+    (window as any).__island={ready:true,caveAsset,water:world.ocean.state,backend:'webgpu',wasm:true,exploring,elapsed,period:environment.period,autoTime:environment.automatic,cave,surface:surfaceAt(px,pz,sim),position:{x:px,y:py,z:pz},found:[...found],nearest:nearest?.kind,fps,audio:sound.state,creatures:world.creatures.map(c=>({kind:c.kind,x:c.group.position.x,y:c.group.position.y,z:c.group.position.z,radius:c.radius,state:c.state,reactions:c.reactions,period:c.period,activity:c.activity})),trees:world.treeTops.length,drawCalls:renderer.info.render.drawCalls};
   });
 }
 start().catch(error=>{console.error(error);$('enter-label').textContent='小岛暂未抵达';$('load-status').textContent=error instanceof Error?error.message:String(error);$('load-status').style.maxWidth='310px';$('load-status').style.lineHeight='1.8';$('engine-status').textContent='WEBGPU UNAVAILABLE';});

@@ -2,9 +2,9 @@ import * as THREE from 'three/webgpu';
 import { skyColor, waterNear, waterFar, worldTint, sunDirection, foamColor, sunsetStrength, duskCloudMaterial, moonStrength, waterView } from './world/materials';
 export type TimeOfDay = 'day'|'sunset'|'night';
 export const periods: Record<TimeOfDay,{label:string;sky:string;near:string;far:string;tint:string;foam:string;wind:number;icon:string}> = {
-  day:{label:'白昼',sky:'#eeeade',near:'#a4c9bb',far:'#d4dfd1',tint:'#ffffff',foam:'#f7f4dc',wind:.55,icon:'☼'},
-  sunset:{label:'夕阳',sky:'#e5c3bb',near:'#a4a69b',far:'#dfb9a5',tint:'#ffe2ba',foam:'#ffdfae',wind:.35,icon:'◒'},
-  night:{label:'夜晚',sky:'#192b3c',near:'#355766',far:'#253f50',tint:'#91afce',foam:'#7aa4b1',wind:.75,icon:'☾'},
+  day:{label:'白昼',sky:'#eeeade',near:'#258a9e',far:'#0a304f',tint:'#ffffff',foam:'#f7f4dc',wind:.55,icon:'☼'},
+  sunset:{label:'夕阳',sky:'#e5c3bb',near:'#30798a',far:'#152d49',tint:'#ffe2ba',foam:'#ffdfae',wind:.35,icon:'◒'},
+  night:{label:'夜晚',sky:'#192b3c',near:'#164151',far:'#071a2c',tint:'#91afce',foam:'#7aa4b1',wind:.75,icon:'☾'},
 };
 export class Environment {
   period:TimeOfDay='day';automatic=false;clock=0;wind=.55;
@@ -27,7 +27,7 @@ export class Environment {
     const p=periods[this.period],blend=1-Math.exp(-dt*.75);
     skyColor.value.lerp(new THREE.Color(p.sky),blend);waterNear.value.lerp(new THREE.Color(p.near),blend);waterFar.value.lerp(new THREE.Color(p.far),blend);worldTint.value.lerp(new THREE.Color(p.tint),blend);foamColor.value.lerp(new THREE.Color(p.foam),blend);
     sunDirection.value.lerp(this.period==='sunset'?new THREE.Vector3(-.7,.22,-.65):this.period==='night'?new THREE.Vector3(-.68,.66,-.32):new THREE.Vector3(-.45,.85,.35),blend);
-    (this.scene.background as THREE.Color).copy(skyColor.value);(this.scene.fog as THREE.Fog).color.copy(skyColor.value);
+    (this.scene.background as THREE.Color).copy(waterFar.value);(this.scene.fog as THREE.Fog).color.copy(skyColor.value);
     this.wind+=(p.wind-this.wind)*blend;
     this.starMaterial.opacity+=((this.period==='night'?.8:0)-this.starMaterial.opacity)*blend;
     sunsetStrength.value+=((this.period==='sunset'?1:0)-sunsetStrength.value)*blend;
