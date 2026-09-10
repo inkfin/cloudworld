@@ -9,7 +9,7 @@ export type VisibilityQuery = (point: THREE.Vector3) => boolean;
 export class CreatureSystem {
   private seed = 7719;
   private period:TimeOfDay='day';
-  constructor(readonly creatures: Creature[], private obstacles: Obstacle[], private sim: Simulation) {
+  constructor(readonly creatures: Creature[], private obstacles: Obstacle[], private sim: Simulation, private waterHeight:(x:number,z:number)=>number=()=>-Infinity) {
     // Find a clear resting patch once; animals walk back to it rather than snapping home.
     for(const c of creatures)for(let i=0;i<80;i++){
       const a=i*2.4,r=i*.035,p={x:c.home.x+Math.cos(a)*r,z:c.home.z+Math.sin(a)*r};
@@ -27,6 +27,12 @@ export class CreatureSystem {
       const routine=routines[c.kind][c.period];
       c.activity=routine.activity;c.pace+=(routine.pace-c.pace)*(1-Math.exp(-dt*2));
       const bird=c.kind==='bird'||c.kind==='gull';
+      const water=this.waterHeight(p.x,p.z);
+      if(bird&&water>p.y-.035&&c.state!=='perched'){
+        c.state='takeoff';c.reactionTime=4;
+        this.escape(c,{x:p.x*1.1,z:p.z*1.1});
+        p.y=Math.max(p.y,water+.07);
+      }
       const proximity=player?Math.hypot(p.x-player.x,p.z-player.z):Infinity;
       if(proximity>2.6)c.cooldown=Math.max(0,c.cooldown-dt);
       c.reactionTime=Math.max(0,c.reactionTime-dt);
@@ -87,7 +93,7 @@ export class CreatureSystem {
       }
       const floor=floorHeight(p.x,p.z,this.sim);
       const overCave=Math.abs(p.x-CAVE.x)<5.3&&Math.abs(p.z-CAVE.z)<5.7;
-      const flightFloor=overCave?this.sim.height(CAVE.x,CAVE.z)+CAVE.roofHeight+1:floor+2.7;
+      const flightFloor=overCave?this.sim.height(CAVE.x,CAVE.z)+CAVE.roofHeight+1:Math.max(floor,water)+2.7;
       const targetY=c.state==='perching'||c.state==='perched'?c.target.y:(c.state==='takeoff'||(bird&&c.state==='returning'))?flightFloor:floor+(c.kind==='butterfly'?(c.state==='sleep'?.15:.85+Math.sin(elapsed*2+c.phase)*.12):0);
       if(bird||c.kind==='butterfly')p.y+=(targetY-p.y)*(1-Math.exp(-dt*(c.state==='takeoff'?7:3)));
       else p.y=targetY;
@@ -132,6 +138,7 @@ export class CreatureSystem {
       const point=new THREE.Vector3(c.home.x+Math.cos(angle)*radius,0,c.home.z+Math.sin(angle)*radius);
       if(!validPosition(point,c.radius+.1,this.obstacles,this.sim))continue;
       if(c.kind==='fox'&&point.z<3.4)continue;
+      if((c.kind==='bird'||c.kind==='gull')&&this.waterHeight(point.x,point.z)>floorHeight(point.x,point.z,this.sim)-.08)continue;
       if((c.kind==='crab'||c.kind==='isopod'||c.kind==='gull')&&this.sim.radius(point.x,point.z)<.65)continue;
       if(player&&Math.hypot(point.x-player.x,point.z-player.z)<1.7)continue;
       point.y=floorHeight(point.x,point.z,this.sim)+.35;

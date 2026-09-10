@@ -113,3 +113,29 @@ test('sleeping animals still react and resume the schedule after disturbance',as
  for(let i=0;i<150;i++)system.update(1/30,elapsed,undefined,()=>true,'sunset');
  assert.ok(world.creatures.every(c=>c.period==='sunset'));
 });
+
+test('shore gull lifts above advancing tide instead of following the submerged sand',async()=>{
+ const {sim,world}=await setup(),gull=world.creatures.find(c=>c.kind==='gull');
+ const system=new CreatureSystem(world.creatures,world.obstacles,sim,world.ocean.heightAt);
+ world.ocean.update(52.5,1/30);
+ let flooded;
+ for(let i=0;i<360;i++){const a=i*Math.PI/180,x=Math.cos(a)*28.6*.90,z=Math.sin(a)*23.1*.90;
+  if(sim.radius(x,z)<.92&&world.ocean.heightAt(x,z)>sim.height(x,z)+.06){flooded={x,z};break;}
+ }
+ assert.ok(flooded,'fixture must place the gull on sand covered by the actual tide');
+ gull.group.position.set(flooded.x,sim.height(flooded.x,flooded.z),flooded.z);gull.target.copy(gull.group.position);
+ for(let frame=0;frame<30;frame++){
+  const t=52.5+frame/30;world.ocean.update(t,1/30);system.update(1/30,t,undefined,()=>true);
+  assert.ok(gull.group.position.y>world.ocean.heightAt(gull.group.position.x,gull.group.position.z),'gull must remain above the rising water');
+ }
+ assert.equal(gull.state,'takeoff');
+ assert.ok(gull.group.position.y>1,'gull should visibly fly, not merely float at water level');
+});
+
+test('ocean depth is resolved before fading canopies and roof',async()=>{
+ const {world}=await setup();new VisibilitySystem(new THREE.OrthographicCamera(),world.canopies,world.caveRoof);
+ assert.ok(world.canopies.every(c=>c.material.transparent),'exercise the fading canopy queue');
+ assert.ok(world.canopies.every(c=>world.ocean.mesh.renderOrder<c.renderOrder),'water must precede all fading crowns');
+ assert.equal(world.ocean.mesh.material.depthTest,true);
+ assert.equal(world.ocean.mesh.material.depthWrite,true,'water must occlude submerged transparent shadows');
+});

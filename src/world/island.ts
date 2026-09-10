@@ -5,9 +5,8 @@ import { TRAILS, CAMP, MEADOW, pathDistance } from './trails';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as THREE from 'three/webgpu';
 import type { Simulation } from '../simulation';
-import { ink } from './materials';
+import { ink, beachMaterial } from './materials';
 import { OceanSystem } from './ocean';
-import { positionWorld, smoothstep, mix, color, texture, vec3 } from 'three/tsl';
 import { CAVE, type Obstacle } from './spatial';
 export type { Obstacle } from './spatial';
 import { animal, blob, cube, limb, shadow, type Species } from './models';
@@ -33,9 +32,7 @@ export function buildIsland(scene: THREE.Scene, sim: Simulation) {
     if(r<rings&&i<segments){const k=r*(segments+1)+i;indices.push(k,k+1,k+segments+1,k+1,k+segments+2,k+segments+1);}
   }
   const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.setIndex(indices);geo.computeVertexNormals();
-  const groundMaterial=ink('#ffffff').clone();groundMaterial.vertexColors=true;
-  const wet=texture(ocean.bed,positionWorld.xz.div(128).add(.5));
-  groundMaterial.colorNode=mix(vec3(groundMaterial.colorNode!).mul(mix(color('#ffffff'),color('#8f9b97'),wet.b)),color('#eef6f1'),wet.g.mul(.65));
+  const groundMaterial=beachMaterial(ocean);
   const ground=new THREE.Mesh(geo,groundMaterial);scene.add(ground);
   const scenery=new THREE.Group();scene.add(scenery);
   const treeTops: THREE.Object3D[]=[];

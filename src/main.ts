@@ -55,7 +55,7 @@ async function start(){
   const world=buildIsland(scene,sim),player=child();scene.add(player.group);
   const {loadCaveModel}=await import('./world/cave-model');
   const caveAsset=await loadCaveModel(world.cave,world.caveRoof,sim);
-  const environment=new Environment(scene,camera),animals=new CreatureSystem(world.creatures,world.obstacles,sim);
+  const environment=new Environment(scene,camera),animals=new CreatureSystem(world.creatures,world.obstacles,sim,world.ocean.heightAt);
   const visibility=new VisibilitySystem(camera,world.canopies,world.caveRoof);
   const playerShadow=new THREE.Group();shadow(playerShadow,0,0,0,.33,.22);scene.add(playerShadow);
   const keys=new Set<string>();let exploring=false,overview=false,nearest:Creature|undefined,toastTimer=0,echoTimer=0;

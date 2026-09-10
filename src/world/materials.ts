@@ -49,17 +49,38 @@ function oceanNoise(p:N){
  const hash=(q:N)=>sin(q.dot(vec2(127.1,311.7))).mul(43758.5453).fract();
  return mix(mix(hash(cell),hash(cell.add(vec2(1,0))),u.x),mix(hash(cell.add(vec2(0,1))),hash(cell.add(1)),u.x),u.y);
 }
-export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
- const m=new THREE.MeshBasicNodeMaterial({fog:false,transparent:true,depthWrite:false,side:THREE.DoubleSide,alphaTest:.002});
- const attr=attribute('position','vec3'),q=vec2(attr.x,attr.y.negate());
+// Shared shore timing keeps the foam front and the incoming sheet of water together.
+function shoreWave(q:N,ocean:OceanSystem){
  const radius=shoreRadius(q.x,q.y);
+ const coast=smoothstep(.83,.94,radius).mul(float(1).sub(smoothstep(1.12,1.4,radius)));
+ const pulse=sin(ocean.clock.mul(.73).add(radius.mul(24)).add(q.x.mul(.11)).add(q.y.mul(.08)))
+  .add(sin(ocean.clock.mul(1.13).add(radius.mul(37)).sub(q.x.mul(.09)).add(q.y.mul(.13))).mul(.4)).max(0).mul(.19).mul(coast);
+ return {radius,coast,pulse};
+}
+function foamGrain(q:N,ocean:OceanSystem){
+ const drifting=q.add(vec2(ocean.clock.mul(.025),ocean.clock.mul(-.018)));
+ const holes=smoothstep(.18,.65,oceanNoise(drifting.mul(6))).mul(.55).add(.45);
+ return holes.mul(oceanNoise(drifting.mul(1.15)).mul(.35).add(.65));
+}
+export function beachMaterial(ocean:OceanSystem){
+ const m=ink('#ffffff').clone(),q=positionWorld.xz;
+ const wet=texture(ocean.bed,q.div(128).add(.5));
+ const {coast,pulse}=shoreWave(q,ocean),depth=ocean.seaLevel.add(pulse).sub(positionWorld.y);
+ const front=smoothstep(-.012,.006,depth).mul(float(1).sub(smoothstep(.025,.085,depth)));
+ const foam=front.mul(.98).max(wet.g.mul(.78)).mul(coast).mul(foamGrain(q,ocean));
+ // Vertex sand pigment belongs to the ground only; it must not tint white foam.
+ const sand=vec3(m.colorNode!).mul(attribute('color','vec3')).mul(mix(vec3(1),color('#d5dddb'),wet.b));
+ m.vertexColors=false;m.colorNode=mix(sand,foamColor,foam);
+ return m;
+}
+export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
+ const m=new THREE.MeshBasicNodeMaterial({fog:false,transparent:true,depthWrite:true,side:THREE.DoubleSide,alphaTest:.002});
+ const attr=attribute('position','vec3'),q=vec2(attr.x,attr.y.negate());
+ const {radius,coast,pulse}=shoreWave(q,ocean);
  const bedSample=texture(ocean.bed,q.div(128).add(.5));
  const offshore=radius.sub(1).max(0).mul(10).negate().add(.2);
  const bed=mix(bedSample.r,offshore,smoothstep(58,64,q.x.abs().max(q.y.abs())));
  const calmDepth=ocean.seaLevel.sub(bed).max(0),shoal=calmDepth.div(calmDepth.add(1.2));
- const coast=smoothstep(.83,.94,radius).mul(float(1).sub(smoothstep(1.12,1.4,radius)));
- const pulse=sin(ocean.clock.mul(.73).add(radius.mul(24)).add(q.x.mul(.11)).add(q.y.mul(.08)))
-  .add(sin(ocean.clock.mul(1.13).add(radius.mul(37)).sub(q.x.mul(.09)).add(q.y.mul(.13))).mul(.4)).max(0).mul(.19).mul(coast);
  let displacement:N=vec3(0),normalSlope:N=vec2(0),whitecaps:N=float(0),peak:N=float(0);
  for(const c of ocean.cascades){
   const tc=q.div(c.length).add(.5);
@@ -85,9 +106,10 @@ export function oceanMaterial(ocean:OceanSystem): THREE.MeshBasicNodeMaterial {
  const spec=waterSpecular(n,v,l,alpha);
  const radiance=mix(color('#fff1d6').mul(.5),color('#c9ddef').mul(.25),moonStrength);
  const light=mix(radiance,color('#ffdb9a').mul(.6),sunsetStrength);
- const breakup=oceanNoise(q.mul(2.4).add(ocean.clock.mul(.035))).mul(.45).add(.55);
- const edge=float(1).sub(smoothstep(.035,.18,depth)).mul(smoothstep(0,.035,depth)).mul(coast);
- const foam=whitecaps.mul(shoal).mul(.55).add(edge.mul(.8)).max(bedSample.g.mul(coast)).mul(breakup).min(.95);
+ const breakup=foamGrain(q,ocean);
+ const edge=float(1).sub(smoothstep(.025,.10,depth)).mul(smoothstep(0,.035,depth)).mul(coast);
+ const offshoreBreakup=oceanNoise(q.mul(2.4).add(ocean.clock.mul(.035))).mul(.45).add(.55);
+ const foam=whitecaps.mul(shoal).mul(.55).mul(offshoreBreakup).add(edge.mul(1.25).max(bedSample.g.mul(coast).mul(1.15)).mul(breakup)).min(.95);
  const lit=body.add(light.mul(spec));
  const water=mix(lit,foamColor,foam);
  const nearClip=float(1).sub(smoothstep(0,20,positionView.z.negate()));
