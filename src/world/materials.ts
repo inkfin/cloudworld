@@ -1,6 +1,6 @@
 import { ISLAND_X, ISLAND_Z } from '../../shared/terrain';
 import * as THREE from 'three/webgpu';
-import { color, float, mix, normalWorld, positionWorld, sin, time, vec3, smoothstep, uniform, cameraPosition, uv } from 'three/tsl';
+import { color, float, mix, normalWorld, positionWorld, sin, time, vec3, smoothstep, uniform, cameraPosition, uv, screenUV, vec2 } from 'three/tsl';
 export const worldTint=uniform(new THREE.Color('#ffffff'));
 export const skyColor=uniform(new THREE.Color('#eeeade'));
 export const waterNear=uniform(new THREE.Color('#a4c9bb'));
@@ -8,6 +8,18 @@ export const waterFar=uniform(new THREE.Color('#d4dfd1'));
 export const foamColor=uniform(new THREE.Color('#f7f4dc'));
 export const sunDirection=uniform(new THREE.Vector3(-.45,.85,.35));
 export const sunsetStrength=uniform(0);
+export const moonStrength=uniform(0);
+export const skyAspect=uniform(1);
+// A distant disc composed into the backdrop, never a world-space solid.
+export function celestialWash(base: ReturnType<typeof color> | typeof skyColor) {
+  const p=screenUV.sub(vec2(.78,.22)).mul(vec2(skyAspect,1));
+  const r=p.length();
+  const disc=float(1).sub(smoothstep(.034,.036,r));
+  const halo=float(1).sub(smoothstep(.036,.12,r)).pow(3).mul(.15);
+  const mottling=sin(p.x.mul(170).add(sin(p.y.mul(110)))).mul(sin(p.y.mul(150))).mul(.025);
+  const lunar=color('#e6e5cd').mul(float(.96).add(mottling));
+  return mix(base,lunar,disc.mul(moonStrength)).add(color('#a5bac9').mul(halo).mul(moonStrength));
+}
 const cache = new Map<string, THREE.MeshBasicNodeMaterial>();
 // 世界空间明暗分段与细颗粒，着色器通过 TSL 编译到 WGSL。
 export function ink(hex: string): THREE.MeshBasicNodeMaterial {
@@ -39,7 +51,7 @@ export function oceanMaterial(): THREE.MeshBasicNodeMaterial {
   const halfVector=cameraPosition.sub(p).normalize().add(sunDirection.normalize()).normalize();
   const glint=n.dot(halfVector).max(0).pow(110).mul(.42).add(n.dot(halfVector).max(0).pow(18).mul(.1));
   const sunsetWater=mix(wash,color('#c89b99'),far.mul(.3).mul(sunsetStrength));
-  m.colorNode = mix(sunsetWater, foamColor, foam.mul(.58)).add(ripple).add(color('#ffe0a4').mul(glint).mul(smoothstep(-.65,.55,sin(p.x.mul(1.7).add(sin(p.z.mul(2.3))).add(time.mul(.4))))).mul(sunsetStrength).mul(smoothstep(1,1.13,radius)));
+  m.colorNode = celestialWash(mix(sunsetWater, foamColor, foam.mul(.58)).add(ripple).add(color('#ffe0a4').mul(glint).mul(smoothstep(-.65,.55,sin(p.x.mul(1.7).add(sin(p.z.mul(2.3))).add(time.mul(.4))))).mul(sunsetStrength).mul(smoothstep(1,1.13,radius))));
   return m;
 }
 export function shadowMaterial(): THREE.MeshBasicMaterial { return new THREE.MeshBasicMaterial({ color: '#304d3f', transparent: true, opacity: .10, depthWrite: false }); }
